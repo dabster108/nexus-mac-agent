@@ -1,0 +1,35 @@
+[project]
+name = "nexus-mac-mcp"
+version = "0.1.0"
+description = "Local MCP server exposing controlled macOS capabilities to NEXUS"
+readme = "README.md"
+authors = [
+    { name = "dabster108", email = "3108dikshanta@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "mcp>=2.0.0",
+]
+
+[project.scripts]
+nexus-mac-mcp = "nexus_mac_mcp.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.11.24,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# Integration tests touch the real machine (and can launch an app), so they are
+# opt-in: `uv run pytest -m integration`.
+addopts = "-q -m 'not integration'"
+markers = [
+    "integration: exercises real macOS behaviour, including launching an app",
+]
