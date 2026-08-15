@@ -366,9 +366,13 @@ def create_server() -> MCPServer:
     @server.tool(
         name="list_memories",
         description=(
-            "List or search remembered facts (projects, workspaces, preferences, "
-            "workflows). A stale flag is included for any memory naming a path "
-            "that no longer exists — do not trust a stale memory blindly."
+            "List or search remembered facts (projects, workspaces, decisions, "
+            "preferences, workflows, and what the user was last working on). "
+            "Call this when the user refers to a project, path or setting "
+            "without giving it, or asks what you remember. Each result carries "
+            "a confidence_level (HIGH/MEDIUM/LOW) and a stale flag; a stale or "
+            "low-confidence memory is a hint about where to look, never an "
+            "answer on its own — confirm it with a live tool before relying on it."
         ),
         meta=SAFE,
     )
@@ -405,9 +409,13 @@ def create_server() -> MCPServer:
     @server.tool(
         name="save_memory",
         description=(
-            "Remember a stable fact — a project's location, a workspace's "
-            "framework, a preference, a known workflow. Refused if the content "
-            "looks like it contains a credential."
+            "Remember one stable fact that will still be useful in a later "
+            "session: where a project lives, what a workspace is built with, a "
+            "decision the user made and why, a preference, or what they were "
+            "working on. Do not save transient state ('the build is broken', "
+            "'the server is starting'), raw command output, file contents, or "
+            "anything you were not asked to keep and would not need again. "
+            "Refused outright if the content looks like a credential."
         ),
         meta=permissions.meta(
             permissions.Permission.CONFIRM,
@@ -454,6 +462,30 @@ def create_server() -> MCPServer:
         ] = False,
     ) -> dict[str, Any]:
         return memory.delete_memory(memory_id, key, type, key_contains, wipe_all)
+
+    @server.tool(
+        name="verify_memory",
+        description=(
+            "Record what you just observed about a remembered fact. Use "
+            "'confirmed' when a live tool result agreed with it, and 'stale' "
+            "when a live result contradicted it. This never changes what is "
+            "remembered and never deletes anything — it only adjusts how much "
+            "the memory should be trusted from now on. To change a value, use "
+            "save_memory; to remove one, use delete_memory."
+        ),
+        meta=SAFE,
+    )
+    def verify_memory(
+        memory_id: Annotated[str, Field(description="A memory id from list_memories.")],
+        outcome: Annotated[
+            str,
+            Field(
+                description="'confirmed' if live evidence agreed, 'stale' if it disagreed.",
+                json_schema_extra={"enum": ["confirmed", "stale"]},
+            ),
+        ],
+    ) -> dict[str, Any]:
+        return memory.verify_memory(memory_id, outcome)
 
     return server
 

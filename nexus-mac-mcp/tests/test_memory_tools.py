@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from nexus_mac_mcp.core.memory_store import MemoryStore
+import stat
+from pathlib import Path
+
+import pytest
+
+from nexus_mac_mcp.core.memory_store import MemoryError, MemoryStore
+from nexus_mac_mcp.core.memory_types import MemorySource, MemoryType
 from nexus_mac_mcp.tools import memory
 
 
@@ -134,3 +140,66 @@ def test_delete_by_key_contains_forget_everything_about_a_project(
     assert result["count"] == 2
     assert set(result["deleted_keys"]) == {"nexus_backend", "nexus_frontend"}
     assert memory.list_memories(store=memory_store)["count"] == 1
+
+
+# --- an unusable database (Phase 9) ---------------------------------------
+
+
+@pytest.fixture
+def corrupt_db(tmp_path: Path) -> Path:
+    path = tmp_path / "corrupt.db"
+    path.write_bytes(b"this is not a sqlite database" * 100)
+    return path
+
+
+def test_a_corrupt_database_is_reported_as_an_ordinary_tool_failure(
+    corrupt_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase 9: sqlite3 errors escaped as protocol-level errors, losing the
+    `success: false` shape every other refusal uses."""
+    monkeypatch.setenv("NEXUS_MAC_DB_PATH", str(corrupt_db))
+    memory.get_memory_store.cache_clear()
+
+    for result in (
+        memory.list_memories(),
+        memory.get_memory(key="x"),
+        memory.save_memory(type="FACT", key="x", value={"a": 1}),
+        memory.delete_memory(wipe_all=True),
+    ):
+        assert result["success"] is False
+        assert "memory database is unavailable" in result["error"]
+
+    memory.get_memory_store.cache_clear()
+
+
+def test_an_unusable_database_never_names_the_path_or_the_sqlite_error(
+    corrupt_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("NEXUS_MAC_DB_PATH", str(corrupt_db))
+    memory.get_memory_store.cache_clear()
+
+    error = memory.list_memories()["error"]
+
+    assert str(corrupt_db) not in error
+    assert "sqlite" not in error.casefold()
+    assert "not a database" not in error.casefold()
+
+    memory.get_memory_store.cache_clear()
+
+
+def test_a_read_only_database_refuses_writes_but_still_reads(tmp_path: Path) -> None:
+    path = tmp_path / "ro.db"
+    store = MemoryStore(path)
+    store.create(
+        type=MemoryType.FACT, key="before", value={"a": 1}, source=MemorySource.USER
+    )
+    path.chmod(stat.S_IRUSR)
+    try:
+        with pytest.raises(MemoryError, match="unavailable"):
+            store.create(
+                type=MemoryType.FACT, key="after", value={"a": 2}, source=MemorySource.USER
+            )
+        # Reading is unaffected, so the agent keeps working with what it has.
+        assert store.get(key="before") is not None
+    finally:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)

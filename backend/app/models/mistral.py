@@ -23,6 +23,7 @@ from app.core.errors import ConfigurationError, ModelError
 from app.models.base import (
     ModelProvider,
     ToolSpec,
+    classify_provider_error,
     content_to_text as _content_to_text,
     dumps_arguments,
     loads_arguments,
@@ -163,8 +164,8 @@ class MistralProvider(ModelProvider):
         except ModelError:
             raise
         except Exception as exc:  # noqa: BLE001 - vendor errors are opaque
-            raise ModelError(
-                "The Mistral model could not be reached.",
-                detail=f"{type(exc).__name__}: {exc}",
-            ) from exc
+            message, _category = classify_provider_error(
+                "Mistral", "MISTRAL_API_KEY", exc
+            )
+            raise ModelError(message, detail=f"{type(exc).__name__}: {exc}") from exc
         return _from_mistral_response(response)

@@ -13,6 +13,7 @@ the run, opened and closed within the single task the stdio transport requires.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Sequence
 from contextlib import AsyncExitStack
 from functools import lru_cache
@@ -24,6 +25,7 @@ from app.agent import events as ev
 from app.agent.approvals import ApprovalBroker, get_approval_broker
 from app.agent.events import EventSink
 from app.agent.graph import build_agent_graph
+from app.agent.nodes import SYSTEM_PROMPT
 from app.agent.state import initial_state
 from app.agent.tasks import TaskRecord, TaskStatus, TaskStore, get_task_store
 from app.context.memory_events import (
@@ -31,7 +33,7 @@ from app.context.memory_events import (
     describe_proposal,
     emit_memory_outcome_events,
 )
-from app.context.models import ContextBudget
+from app.context.models import ContextBudget, PlanningContext, TaskSnapshot
 from app.core.config import Settings, get_settings
 from app.core.errors import NexusError, ValidationError
 from app.core.logging import get_logger
@@ -49,6 +51,10 @@ logger = get_logger(__name__)
 
 NO_ANSWER = "The agent finished without producing an answer."
 CANCELLED_MESSAGE = "The task was cancelled."
+
+#: How long the context panel's view of the world may be reused. Short enough
+#: that a branch switch or a started server appears almost immediately.
+CONTEXT_CACHE_SECONDS = 5.0
 
 
 def _final_answer(messages: Sequence[Any]) -> str | None:
@@ -81,6 +87,10 @@ class AgentRunner:
         # Only used when the application has opened it; tests leave it closed.
         self._pool = pool if pool is not None else get_mcp_pool()
         self._missions = mission_store or get_mission_store()
+        # Context gathered per task, so the UI can show what informed an
+        # answer. Bounded by the task store's own retention.
+        self._contexts: dict[str, PlanningContext] = {}
+        self._context_cache: tuple[float, PlanningContext] | None = None
 
     @property
     def task_store(self) -> TaskStore:
@@ -251,6 +261,7 @@ class AgentRunner:
         async with AsyncExitStack() as stack:
             registry = await self._open_registry(stack)
             emit = self._sink_for(record)
+            system_prompt = await self._contextual_prompt(text, task_id, registry, emit)
             graph = build_agent_graph(
                 provider=model_provider,
                 registry=registry,
@@ -260,6 +271,7 @@ class AgentRunner:
                 max_iterations=self._settings.agent_max_iterations,
                 timeout=self._settings.request_timeout_seconds,
                 permission_timeout=self._settings.permission_timeout_seconds,
+                system_prompt=system_prompt,
             )
 
             final_state: dict[str, Any] = {}
@@ -274,6 +286,124 @@ class AgentRunner:
             return final_state
 
         return {}  # pragma: no cover - unreachable, satisfies type checkers
+
+    def _budget(self) -> ContextBudget:
+        return ContextBudget(
+            max_memories=self._settings.context_max_memories,
+            max_workspace_facts=self._settings.context_max_workspace_facts,
+            max_chars=self._settings.context_max_chars,
+        )
+
+    def _recent_tasks(self, task_id: str) -> list[TaskSnapshot]:
+        """The last few requests, so "continue" has something to continue from.
+
+        Bounded and summary-only: the request text and its outcome, never a
+        task's events or its answer, which would put an unbounded amount of
+        earlier conversation into every later prompt.
+        """
+        budget = self._budget()
+        snapshots: list[TaskSnapshot] = []
+        for record in self._tasks.list_tasks(budget.max_recent_tasks + 1):
+            if record.task_id == task_id or record.request.startswith("[mission_"):
+                continue
+            snapshots.append(
+                TaskSnapshot(
+                    task_id=record.task_id,
+                    request=record.request[:120],
+                    status=str(record.status),
+                    created_at=record.created_at,
+                )
+            )
+        return snapshots[: budget.max_recent_tasks]
+
+    async def _contextual_prompt(
+        self, text: str, task_id: str, registry: ToolRegistry, emit: EventSink
+    ) -> str:
+        """The ordinary system prompt, plus whatever context this request earns.
+
+        Context collection is best-effort by design: it runs before the model
+        and only ever *adds* information, so a failure here must degrade to an
+        ordinary un-contextualised answer rather than sink the request.
+        """
+        # Imported here, not at module scope: `app.context` imports the
+        # collector, which imports `app.agent`, which imports this module.
+        # Deferring the import to call time breaks that cycle without either
+        # package having to stop re-exporting its own contents.
+        from app.context.collector import ContextCollector
+
+        budget = self._budget()
+        try:
+            collector = ContextCollector(
+                registry,
+                max_memories=budget.max_memories,
+                max_workspace_facts=budget.max_workspace_facts,
+                budget=budget,
+            )
+            context = await collector.collect(
+                text, task_id, emit, recent_tasks=self._recent_tasks(task_id)
+            )
+        except Exception:  # noqa: BLE001 - context is an enhancement, never a gate
+            logger.warning("Context collection failed", exc_info=True, extra={"task_id": task_id})
+            return SYSTEM_PROMPT
+
+        self._contexts[task_id] = context
+        block = context.to_prompt_block(budget.max_chars, budget.max_memory_chars)
+        if not block:
+            return SYSTEM_PROMPT
+        return f"{SYSTEM_PROMPT}\n\n{block}"
+
+    def context_for(self, task_id: str) -> PlanningContext | None:
+        """The context gathered for a task, for the /api/context endpoint."""
+        return self._contexts.get(task_id)
+
+    async def current_context(self) -> PlanningContext:
+        """What NEXUS can see right now, for the context panel.
+
+        Briefly cached: the panel polls, and re-running ``detect_workspace`` and
+        ``git_status`` on every poll would spend real work to redraw a sidebar
+        that has not changed. The TTL is short enough that a branch switch or a
+        server start shows up within seconds, which is the only correctness
+        anyone needs from a status panel.
+        """
+        from app.context.collector import ContextCollector
+        from app.context.intent import ORIENT_PLAN
+
+        now = time.monotonic()
+        if self._context_cache and now - self._context_cache[0] < CONTEXT_CACHE_SECONDS:
+            return self._context_cache[1]
+
+        budget = self._budget()
+        async with AsyncExitStack() as stack:
+            registry = await self._open_registry(stack)
+            collector = ContextCollector(
+                registry,
+                max_memories=budget.max_memories,
+                max_workspace_facts=budget.max_workspace_facts,
+                budget=budget,
+            )
+            context = await collector.collect(
+                "", "context-panel", ev.no_sink, plan=ORIENT_PLAN
+            )
+        self._context_cache = (now, context)
+        return context
+
+    async def list_memories(self, query: str | None = None, limit: int = 50) -> list[dict]:
+        """Remembered facts, for the memory panel.
+
+        Goes through the same SAFE ``list_memories`` tool the agent uses rather
+        than reaching into SQLite, so the panel can never see more than the
+        agent can.
+        """
+        async with AsyncExitStack() as stack:
+            registry = await self._open_registry(stack)
+            if registry.get("list_memories") is None:
+                return []
+            result = await registry.call(
+                "list_memories", {"query": query or None, "limit": limit}
+            )
+        if result.is_error or not isinstance(result.structured, dict):
+            return []
+        return list(result.structured.get("memories") or [])
 
     async def _execute_mission(
         self,

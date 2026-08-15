@@ -64,7 +64,10 @@ DENIED_PREFIXES: tuple[str, ...] = (
 #: Messages, browser history and application tokens. It is named here rather
 #: than in :data:`DENIED_DIRECTORY_NAMES` so that an ordinary project folder
 #: called "Library" stays readable.
-DENIED_HOME_SUBPATHS: tuple[str, ...] = ("Library",)
+#: ``.config/gh`` holds the GitHub CLI's OAuth token in ``hosts.yml`` — a name
+#: far too generic to put in :data:`SECRET_FILE_PATTERNS`, so the directory is
+#: named here instead.
+DENIED_HOME_SUBPATHS: tuple[str, ...] = ("Library", ".config/gh")
 
 #: Directory names that hold credentials. Never listed, searched or read into.
 DENIED_DIRECTORY_NAMES: frozenset[str] = frozenset(
@@ -104,6 +107,20 @@ SECRET_FILE_PATTERNS: tuple[str, ...] = (
     "secrets.json",
     "secrets.yaml",
     "secrets.yml",
+    # Anything whose name ends in "credentials" — `.git-credentials` holds
+    # `https://user:token@host` in plain text — and the matching `credentials.*`
+    # spellings used by cargo, terraform and gcloud.
+    "*credentials",
+    "credentials.*",
+    # Shell and REPL history. These are mode 0600 for a reason: a pasted
+    # `export TOKEN=...` or `mysql -pSECRET` lives here forever. Anchored to
+    # dotfiles so an ordinary `history.md` stays readable.
+    ".*history",
+    # Cloud/service configs that carry tokens rather than merely pointing at them.
+    "rclone.conf",
+    "*.keychain",
+    "*.keychain-db",
+    "*.token",
 )
 
 #: Skipped when walking a tree: large, uninteresting, or handled by other tools.

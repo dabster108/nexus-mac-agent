@@ -7,6 +7,7 @@ from conftest import FakeToolSource, tool_definition
 
 from app.agent.events import EventType, ExecutionEvent
 from app.context.collector import ContextCollector
+from app.context.intent import MISSION_PLAN
 from app.tools.permissions import PermissionLevel
 from app.tools.registry import ToolRegistry, ToolResult
 
@@ -79,47 +80,44 @@ async def test_relevant_memories_are_retrieved() -> None:
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
     emit = _Recorder()
 
-    context = await collector.collect("Prepare the nexus project.", "task_1", emit)
+    context = await collector.collect("Prepare the nexus project.", "task_1", emit, plan=MISSION_PLAN)
 
     assert len(context.memories) == 1
     assert context.memories[0].key == "nexus"
     assert emit.of_type(EventType.MEMORY_RETRIEVED)
 
 
-async def test_unrelated_memories_are_not_included(monkeypatch) -> None:
-    """A keyword search must not silently widen into "everything I've saved"."""
-    calls: list[dict] = []
+async def test_unrelated_memories_are_not_included() -> None:
+    """Context must not widen into "everything I've saved".
 
-    def _tool_source():
-        source = memories_source(
-            [{"id": "mem_1", "type": "PROJECT", "key": "nexus", "value": {"path": "/x"}, "confidence": 1.0}]
+    Phase 10 moved the filtering from the query to :mod:`app.context.relevance`
+    — the store is read once and scored locally — so this asserts the outcome
+    (an unrelated memory stays out of the prompt) rather than the mechanism.
+    """
+    registry = await build_registry(
+        memories_source(
+            [
+                {"id": "mem_1", "type": "PROJECT", "key": "nexus",
+                 "value": {"path": "/x"}, "confidence": 1.0},
+                {"id": "mem_2", "type": "FACT", "key": "dentist_appointment",
+                 "value": {"when": "tuesday"}, "confidence": 1.0},
+            ]
         )
-        original = source.call_tool
-
-        async def recording_call(name, arguments):
-            calls.append(dict(arguments))
-            return await original(name, arguments)
-
-        source.call_tool = recording_call
-        return source
-
-    registry = await build_registry(_tool_source())
+    )
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    await collector.collect("Prepare the coffee machine for cleaning.", "task_1", _Recorder())
+    context = await collector.collect(
+        "Prepare the nexus project.", "task_1", _Recorder(), plan=MISSION_PLAN
+    )
 
-    # The search used keywords from *this* objective ("coffee"/"cleaning"/
-    # "machine"), never an unfiltered/blank query that would return everything.
-    queries = {call.get("query") for call in calls}
-    assert None not in queries
-    assert "" not in queries
+    assert [m.key for m in context.memories] == ["nexus"]
 
 
 async def test_no_memory_tool_means_no_memories_and_no_crash() -> None:
     registry = await build_registry()  # empty registry
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    context = await collector.collect("anything", "task_1", _Recorder())
+    context = await collector.collect("anything", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert context.memories == ()
 
@@ -132,7 +130,7 @@ async def test_memory_retrieval_respects_the_budget() -> None:
     registry = await build_registry(memories_source(many))
     collector = ContextCollector(registry, max_memories=5, max_workspace_facts=20)
 
-    context = await collector.collect("many facts here", "task_1", _Recorder())
+    context = await collector.collect("many facts here", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert len(context.memories) <= 5
 
@@ -146,7 +144,7 @@ async def test_a_stale_memory_is_flagged_not_hidden() -> None:
     )
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    context = await collector.collect("backend workspace", "task_1", _Recorder())
+    context = await collector.collect("backend workspace", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert context.memories[0].stale is True
 
@@ -164,7 +162,7 @@ async def test_an_explicit_path_in_the_objective_is_verified() -> None:
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
     emit = _Recorder()
 
-    context = await collector.collect("Inspect /Users/x/nexus please.", "task_1", emit)
+    context = await collector.collect("Inspect /Users/x/nexus please.", "task_1", emit, plan=MISSION_PLAN)
 
     assert len(context.workspaces) == 1
     assert context.workspaces[0].verified is True
@@ -181,7 +179,7 @@ async def test_an_explicit_path_wins_over_a_remembered_one() -> None:
     )
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    context = await collector.collect("Inspect /explicit/path now.", "task_1", _Recorder())
+    context = await collector.collect("Inspect /explicit/path now.", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert [w.path for w in context.workspaces] == ["/explicit/path"]
 
@@ -198,7 +196,7 @@ async def test_falls_back_to_a_remembered_path_when_none_is_named() -> None:
     )
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    context = await collector.collect("Prepare the nexus project for development.", "task_1", _Recorder())
+    context = await collector.collect("Prepare the nexus project for development.", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert [w.path for w in context.workspaces] == ["/remembered/nexus"]
 
@@ -210,7 +208,7 @@ async def test_a_path_that_no_longer_exists_is_reported_unverified() -> None:
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
     emit = _Recorder()
 
-    context = await collector.collect("Inspect /gone please.", "task_1", emit)
+    context = await collector.collect("Inspect /gone please.", "task_1", emit, plan=MISSION_PLAN)
 
     assert context.workspaces[0].verified is False
     event = emit.of_type(EventType.WORKSPACE_DETECTED)[0]
@@ -227,7 +225,7 @@ async def test_git_state_is_included_for_a_repository() -> None:
     )
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    context = await collector.collect("Inspect /x/nexus please.", "task_1", _Recorder())
+    context = await collector.collect("Inspect /x/nexus please.", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert context.workspaces[0].git_branch == "main"
     assert context.workspaces[0].git_clean is False
@@ -247,7 +245,7 @@ async def test_a_matching_live_port_is_not_a_conflict() -> None:
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
     emit = _Recorder()
 
-    await collector.collect("Inspect /x/backend please.", "task_1", emit)
+    await collector.collect("Inspect /x/backend please.", "task_1", emit, plan=MISSION_PLAN)
 
     assert emit.of_type(EventType.MEMORY_CONFLICT) == []
 
@@ -264,7 +262,7 @@ async def test_a_disagreeing_live_port_is_flagged_as_a_conflict() -> None:
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
     emit = _Recorder()
 
-    await collector.collect("Inspect /x/backend please.", "task_1", emit)
+    await collector.collect("Inspect /x/backend please.", "task_1", emit, plan=MISSION_PLAN)
 
     conflicts = emit.of_type(EventType.MEMORY_CONFLICT)
     assert len(conflicts) == 1
@@ -284,7 +282,7 @@ async def test_no_live_process_means_no_conflict_just_untested() -> None:
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
     emit = _Recorder()
 
-    await collector.collect("Inspect /x/backend please.", "task_1", emit)
+    await collector.collect("Inspect /x/backend please.", "task_1", emit, plan=MISSION_PLAN)
 
     assert emit.of_type(EventType.MEMORY_CONFLICT) == []
 
@@ -301,7 +299,7 @@ async def test_machine_context_is_gathered() -> None:
     )
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    context = await collector.collect("anything", "task_1", _Recorder())
+    context = await collector.collect("anything", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert context.machine is not None
     assert context.machine.platform == "macOS"
@@ -312,7 +310,7 @@ async def test_machine_context_is_none_without_the_tool() -> None:
     registry = await build_registry()
 
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
-    context = await collector.collect("anything", "task_1", _Recorder())
+    context = await collector.collect("anything", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert context.machine is None
 
@@ -346,7 +344,7 @@ async def test_a_failing_tool_does_not_sink_context_collection() -> None:
     registry = await build_registry(source)
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
 
-    context = await collector.collect("anything", "task_1", _Recorder())
+    context = await collector.collect("anything", "task_1", _Recorder(), plan=MISSION_PLAN)
 
     assert context.machine is None  # degraded gracefully, no exception
 
@@ -359,19 +357,75 @@ async def test_context_collected_is_always_emitted_once() -> None:
     collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
     emit = _Recorder()
 
-    await collector.collect("anything", "task_1", emit)
+    await collector.collect("anything", "task_1", emit, plan=MISSION_PLAN)
 
     assert len(emit.of_type(EventType.CONTEXT_COLLECTED)) == 1
 
 
 async def test_truncated_is_reported_when_the_memory_budget_is_hit() -> None:
+    # Every memory here is relevant to the objective, so the budget — not
+    # relevance — is what does the cutting.
     many = [
-        {"id": f"mem_{i}", "type": "FACT", "key": f"k{i}", "value": {}, "confidence": 1.0}
+        {"id": f"mem_{i}", "type": "FACT", "key": f"nexus_fact_{i}", "value": {},
+         "confidence": 1.0}
         for i in range(10)
     ]
     registry = await build_registry(memories_source(many))
     collector = ContextCollector(registry, max_memories=3, max_workspace_facts=20)
 
-    context = await collector.collect("facts", "task_1", _Recorder())
+    context = await collector.collect("nexus", "task_1", _Recorder(), plan=MISSION_PLAN)
 
+    assert len(context.memories) == 3
     assert context.truncated is True
+
+
+async def test_git_state_is_gathered_for_a_subdirectory_of_a_repository() -> None:
+    """Phase 10, found live: `detect_workspace` reports is_git_repository=false
+    for a subdirectory of a repo, so the collector skipped git_status and the
+    context said nothing about the branch — and the model filled the silence
+    with an invented "main, clean"."""
+    registry = await build_registry(
+        workspace_source(
+            "/repo/backend",
+            # A subdirectory: a real project, but not the repository root.
+            {
+                "success": True,
+                "path": "/repo/backend",
+                "project_types": ["python"],
+                "is_git_repository": False,
+            },
+            {"success": True, "branch": "dikshanta", "clean": False,
+             "changes": ["a.py", "b.py"]},
+        )
+    )
+    collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
+
+    context = await collector.collect(
+        "Inspect /repo/backend please.", "task_1", _Recorder(), plan=MISSION_PLAN
+    )
+
+    workspace = context.workspaces[0]
+    assert workspace.git_branch == "dikshanta"
+    assert workspace.changed_files == 2
+    assert workspace.is_git_repository is True
+    assert "dikshanta" in workspace.to_line()
+
+
+async def test_a_directory_outside_any_repository_reports_no_git_state() -> None:
+    registry = await build_registry(
+        workspace_source(
+            "/tmp/plain",
+            {"success": True, "path": "/tmp/plain", "project_types": [],
+             "is_git_repository": False},
+            {"success": False, "error": "Not a git repository."},
+        )
+    )
+    collector = ContextCollector(registry, max_memories=10, max_workspace_facts=20)
+
+    context = await collector.collect(
+        "Inspect /tmp/plain please.", "task_1", _Recorder(), plan=MISSION_PLAN
+    )
+
+    workspace = context.workspaces[0]
+    assert workspace.is_git_repository is False
+    assert workspace.git_branch is None

@@ -38,6 +38,8 @@ TAGS_METADATA = [
     {"name": "tasks", "description": "Inspect and cancel agent runs."},
     {"name": "tools", "description": "Discover tools. Information only."},
     {"name": "permissions", "description": "Approve or deny CONFIRM tool calls."},
+    {"name": "context", "description": "What NEXUS can currently see. Read-only."},
+    {"name": "memory", "description": "What NEXUS remembers. Read-only; forgetting goes through approval."},
     {"name": "mcp", "description": "MCP server status."},
     {"name": "models", "description": "Configured model providers."},
 ]

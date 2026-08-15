@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage
 
 from app.core.errors import ConfigurationError, ModelError
-from app.models.base import ModelProvider, ToolSpec
+from app.models.base import ModelProvider, ToolSpec, classify_provider_error
 
 
 class GroqProvider(ModelProvider):
@@ -65,10 +65,8 @@ class GroqProvider(ModelProvider):
         try:
             response = await client.ainvoke(list(messages))
         except Exception as exc:  # noqa: BLE001 - vendor errors are opaque
-            raise ModelError(
-                "The Groq model could not be reached.",
-                detail=f"{type(exc).__name__}: {exc}",
-            ) from exc
+            message, _category = classify_provider_error("Groq", "GROQ_API_KEY", exc)
+            raise ModelError(message, detail=f"{type(exc).__name__}: {exc}") from exc
         if not isinstance(response, AIMessage):  # pragma: no cover - defensive
             raise ModelError(
                 "The Groq model returned an unexpected response.",

@@ -65,6 +65,25 @@ the value up and finish the job. If a tool refuses on policy grounds, or
 says something does not exist, say so plainly and stop; do not retry the
 same call with guessed arguments. Never describe a *successful* result as
 unavailable or refused.
+
+Three kinds of question are answered by describing the state you were given
+rather than by acting:
+
+"Continue where I left off" — say which workspace, its branch and whether it
+has uncommitted changes, anything running, and what was last being worked on.
+Then ask what they would like to do next. Do not start, stop, or change
+anything as part of answering.
+
+"What changed?" — answer from Git evidence: the branch, the modified files,
+the recent commits. Say which evidence you used. If you cannot see far enough
+back to cover the period they asked about, say so plainly rather than
+estimating; never invent history you did not read.
+
+"What am I working on?" — combine the workspace, its Git state, any managed
+processes, and what you remember, into one short answer.
+
+For all three: several short lines are clearer than one long sentence, and
+saying what you do not know is better than filling the gap.
 """
 
 #: How many tools may be run for a single assistant turn. The step budget
@@ -73,6 +92,12 @@ unavailable or refused.
 #: the same call in a single response, every one of which would otherwise be
 #: executed. Real work here needs one or two calls at a time.
 MAX_TOOL_CALLS_PER_TURN = 4
+
+#: Ceiling on the text one tool result contributes to the transcript. Sized to
+#: sit well above ordinary output (``git_status`` and ``system_info`` are a few
+#: hundred bytes) and well below the point where one result exhausts the
+#: model's context window.
+MAX_TOOL_RESULT_CHARS = 32_000
 
 
 def _record(
@@ -133,10 +158,36 @@ def _bounded_tool_calls(calls: list[Any], task_id: str) -> list[Any]:
 
 def _result_to_text(content: str, structured: Any) -> str:
     if content:
-        return content
-    if structured is not None:
-        return json.dumps(structured, default=str)
-    return "(the tool returned no output)"
+        text = content
+    elif structured is not None:
+        text = json.dumps(structured, default=str)
+    else:
+        return "(the tool returned no output)"
+    return _bounded_result(text)
+
+
+def _bounded_result(text: str) -> str:
+    """Cap what one tool result may add to the transcript.
+
+    The MCP tools each bound their own output, but this is the backend's own
+    backstop and must not depend on that: ``MCP_SERVER_COMMAND`` can point at
+    any local server, and a result enters the transcript for the rest of the
+    task, so a single oversized one is carried into *every* later request.
+
+    The marker matters as much as the cut — a silently truncated result would
+    have the model confidently answer from half a file.
+    """
+    if len(text) <= MAX_TOOL_RESULT_CHARS:
+        return text
+    logger.warning(
+        "Truncating a tool result of %d chars to %d", len(text), MAX_TOOL_RESULT_CHARS
+    )
+    return (
+        f"{text[:MAX_TOOL_RESULT_CHARS]}\n\n"
+        f"[truncated: the tool returned {len(text)} characters, "
+        f"of which the first {MAX_TOOL_RESULT_CHARS} are shown. "
+        f"Say so if the answer depends on the rest.]"
+    )
 
 
 async def agent_node(

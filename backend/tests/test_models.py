@@ -6,7 +6,7 @@ import pytest
 
 from app.core.config import Settings
 from app.core.errors import ConfigurationError
-from app.models.base import ToolSpec, loads_arguments
+from app.models.base import ToolSpec, classify_provider_error, loads_arguments
 from app.models.groq import GroqProvider
 from app.models.mistral import MistralProvider
 from app.models.router import ModelRouter
@@ -91,3 +91,77 @@ def test_malformed_tool_arguments_do_not_crash() -> None:
     assert loads_arguments("not json") == {}
     assert loads_arguments('{"a": 1}') == {"a": 1}
     assert loads_arguments(None) == {}
+
+
+# --- provider error classification (Phase 9) ------------------------------
+
+
+class _VendorError(Exception):
+    """Stands in for a Groq/Mistral SDK error, which carries a status code."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+ORG_ID = "org_01jqh2h6gefgw97c7vaj290k4t"
+
+RATE_LIMIT = _VendorError(
+    "Error code: 413 - {'error': {'message': 'Request too large for model "
+    f"`llama-3.1-8b-instant` in organization `{ORG_ID}` on tokens per minute "
+    "(TPM): Limit 6000, Requested 6774', 'code': 'rate_limit_exceeded'}}",
+    413,
+)
+MALFORMED_TOOL_CALL = _VendorError(
+    "Error code: 400 - tool call validation failed: parameters for tool "
+    "git_status did not match schema: missing properties: 'path'",
+    400,
+)
+
+
+@pytest.mark.parametrize(
+    ("exc", "category", "expected_in_message"),
+    [
+        (RATE_LIMIT, "rate_limit", "rate limiting"),
+        (MALFORMED_TOOL_CALL, "tool_call", "malformed"),
+        (_VendorError("Error code: 401 - invalid_api_key", 401), "auth", "API key"),
+        (_VendorError("Error code: 404 - model not found", 404), "model_not_found", "model"),
+        (_VendorError("Connection timed out"), "connectivity", "could not be reached"),
+        (_VendorError("kaboom"), "unknown", "request failed"),
+    ],
+)
+def test_provider_failures_are_classified_accurately(
+    exc: Exception, category: str, expected_in_message: str
+) -> None:
+    """Phase 9: every failure used to read "could not be reached", which sent
+    people looking at their network when the cause was a rate limit or a
+    malformed tool call."""
+    message, found = classify_provider_error("Groq", "GROQ_API_KEY", exc)
+
+    assert found == category
+    assert expected_in_message in message
+
+
+def test_a_rate_limit_is_not_reported_as_connectivity() -> None:
+    message, category = classify_provider_error("Groq", "GROQ_API_KEY", RATE_LIMIT)
+
+    assert category == "rate_limit"
+    assert "could not be reached" not in message
+
+
+def test_vendor_account_details_never_reach_the_user_message() -> None:
+    """The vendor text names the organisation; that belongs in the log only."""
+    message, _ = classify_provider_error("Groq", "GROQ_API_KEY", RATE_LIMIT)
+
+    assert ORG_ID not in message
+    assert "llama-3.1-8b-instant" not in message
+
+
+def test_the_named_env_var_matches_the_provider() -> None:
+    _, _ = classify_provider_error("Mistral", "MISTRAL_API_KEY", RATE_LIMIT)
+    message, _ = classify_provider_error(
+        "Mistral", "MISTRAL_API_KEY", _VendorError("unauthorized", 401)
+    )
+
+    assert "MISTRAL_API_KEY" in message
+    assert "GROQ_API_KEY" not in message

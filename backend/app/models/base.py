@@ -114,3 +114,51 @@ def loads_arguments(raw: Any) -> dict[str, Any]:
     except (TypeError, ValueError):
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+#: Markers that identify a provider failure without depending on any one SDK's
+#: exception classes. Checked against the exception's status code and text.
+_RATE_LIMIT_MARKERS = ("rate_limit", "rate limit", "tokens per minute", "too large", "quota")
+_TOOL_CALL_MARKERS = ("tool_use_failed", "tool call validation", "did not match schema")
+_AUTH_MARKERS = ("invalid_api_key", "authentication", "unauthorized", "invalid api key")
+_CONNECTIVITY_MARKERS = ("timeout", "timed out", "connection", "unreachable", "network")
+
+
+def classify_provider_error(provider: str, env_var: str, exc: Exception) -> tuple[str, str]:
+    """Turn an opaque vendor exception into (user_message, category).
+
+    Every provider failure used to read "could not be reached", which sent
+    people looking at their network when the real cause was a rate limit, a
+    malformed tool call, or an unset key. The returned message is a fixed
+    string per category: vendor text can carry an organisation id or account
+    detail, so it stays in ``detail`` (logged) and never in the message
+    (returned to the client).
+    """
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    text = f"{type(exc).__name__}: {exc}".casefold()
+
+    def mentions(markers: tuple[str, ...]) -> bool:
+        return any(marker in text for marker in markers)
+
+    if status in (401, 403) or mentions(_AUTH_MARKERS):
+        return (
+            f"{provider} rejected the API key. Check {env_var} in backend/.env.",
+            "auth",
+        )
+    if status in (429, 413) or mentions(_RATE_LIMIT_MARKERS):
+        return (
+            f"{provider} is rate limiting this request — the conversation may also "
+            f"be too long for the current plan. Wait a moment and try again.",
+            "rate_limit",
+        )
+    if mentions(_TOOL_CALL_MARKERS):
+        return (
+            f"{provider} rejected the model's tool call as malformed. "
+            f"Rephrasing the request usually clears it.",
+            "tool_call",
+        )
+    if status == 404:
+        return (f"{provider} does not offer the configured model.", "model_not_found")
+    if mentions(_CONNECTIVITY_MARKERS):
+        return (f"The {provider} model could not be reached.", "connectivity")
+    return (f"The {provider} request failed.", "unknown")

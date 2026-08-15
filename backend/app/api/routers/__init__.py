@@ -1,6 +1,16 @@
 """One router per API group, mounted in :mod:`app.main`."""
 
-from app.api.routers import chat, health, mcp, models, permissions, tasks, tools
+from app.api.routers import (
+    chat,
+    context,
+    health,
+    mcp,
+    memory,
+    models,
+    permissions,
+    tasks,
+    tools,
+)
 
 #: Mount order determines the order of the groups in /docs.
 ALL_ROUTERS = (
@@ -9,8 +19,21 @@ ALL_ROUTERS = (
     tasks.router,
     tools.router,
     permissions.router,
+    context.router,
+    memory.router,
     mcp.router,
     models.router,
 )
 
-__all__ = ["ALL_ROUTERS", "chat", "health", "mcp", "models", "permissions", "tasks", "tools"]
+__all__ = [
+    "ALL_ROUTERS",
+    "chat",
+    "context",
+    "health",
+    "mcp",
+    "memory",
+    "models",
+    "permissions",
+    "tasks",
+    "tools",
+]

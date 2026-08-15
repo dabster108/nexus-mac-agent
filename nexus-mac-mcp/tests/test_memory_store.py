@@ -6,8 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from nexus_mac_mcp.core.memory_store import MemoryError, MemoryStore
-from nexus_mac_mcp.core.memory_types import MemorySource, MemoryStatus, MemoryType
+from nexus_mac_mcp.core.memory_store import (
+    MAX_LIST_LIMIT,
+    MAX_VALUE_BYTES,
+    MemoryError,
+    MemoryStore,
+)
+from nexus_mac_mcp.core.memory_types import (
+    ConfidenceLevel,
+    MemorySource,
+    MemoryStatus,
+    MemoryType,
+)
 
 
 # --- create / read -----------------------------------------------------
@@ -273,6 +283,81 @@ def test_wipe_all_deletes_everything(memory_store: MemoryStore) -> None:
     assert memory_store.list() == []
 
 
+def test_an_oversized_memory_value_is_refused(memory_store: MemoryStore) -> None:
+    """Phase 9: values were unbounded. The value is read back into the agent's
+    transcript verbatim, so one oversized save poisons every later request."""
+    with pytest.raises(MemoryError, match="too large"):
+        memory_store.create(
+            type=MemoryType.FACT,
+            key="huge",
+            value={"blob": "A" * (MAX_VALUE_BYTES + 1)},
+            source=MemorySource.USER,
+        )
+
+    assert memory_store.get(key="huge") is None
+
+
+def test_an_ordinary_memory_is_comfortably_under_the_limit(
+    memory_store: MemoryStore,
+) -> None:
+    memory = memory_store.create(
+        type=MemoryType.PROJECT,
+        key="nexus",
+        value={"path": "/Users/someone/Documents/distributed-systems-lab", "port": 8000},
+        source=MemorySource.USER,
+    )
+
+    assert memory.value["port"] == 8000
+
+
+def test_a_value_that_cannot_be_serialised_is_refused(memory_store: MemoryStore) -> None:
+    with pytest.raises(MemoryError):
+        memory_store.create(
+            type=MemoryType.FACT, key="bad", value={"o": object()}, source=MemorySource.USER
+        )
+
+
+def test_wipe_all_deletes_past_the_list_limit(memory_store: MemoryStore) -> None:
+    """Phase 9: deletion used to reuse list(), whose MAX_LIST_LIMIT exists to
+    keep a *prompt* small. "Forget everything" reported deleting 50 and left
+    the rest ACTIVE — the user believes data is gone when it is not."""
+    for index in range(MAX_LIST_LIMIT + 10):
+        memory_store.create(
+            type=MemoryType.FACT, key=f"fact_{index:03d}", value={}, source=MemorySource.USER
+        )
+
+    deleted = memory_store.delete(wipe_all=True)
+
+    assert len(deleted) == MAX_LIST_LIMIT + 10
+    assert memory_store.list(limit=MAX_LIST_LIMIT) == []
+
+
+def test_bulk_delete_by_type_is_not_truncated_either(memory_store: MemoryStore) -> None:
+    for index in range(MAX_LIST_LIMIT + 5):
+        memory_store.create(
+            type=MemoryType.WORKSPACE, key=f"ws_{index:03d}", value={}, source=MemorySource.USER
+        )
+    memory_store.create(
+        type=MemoryType.FACT, key="keep_me", value={}, source=MemorySource.USER
+    )
+
+    deleted = memory_store.delete(type=MemoryType.WORKSPACE)
+
+    assert len(deleted) == MAX_LIST_LIMIT + 5
+    # The filter is still respected: an unrelated memory survives.
+    assert [m.key for m in memory_store.list()] == ["keep_me"]
+
+
+def test_reads_stay_bounded_for_prompt_size(memory_store: MemoryStore) -> None:
+    """The deletion fix must not have removed the cap on ordinary reads."""
+    for index in range(MAX_LIST_LIMIT + 10):
+        memory_store.create(
+            type=MemoryType.FACT, key=f"fact_{index:03d}", value={}, source=MemorySource.USER
+        )
+
+    assert len(memory_store.list(limit=999)) == MAX_LIST_LIMIT
+
+
 def test_delete_requires_a_filter(memory_store: MemoryStore) -> None:
     with pytest.raises(MemoryError, match="At least one filter"):
         memory_store.delete()
@@ -355,3 +440,128 @@ def test_db_path_is_overridable_for_tests(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setenv("NEXUS_MAC_DB_PATH", str(tmp_path / "custom.db"))
 
     assert default_db_path() == tmp_path / "custom.db"
+
+
+# --- confidence, verification and contradiction (Phase 10) -----------------
+
+
+def test_a_fresh_user_memory_reads_as_high_confidence(memory_store: MemoryStore) -> None:
+    memory = memory_store.create(
+        type=MemoryType.PROJECT, key="nexus", value={"path": "/x"},
+        source=MemorySource.USER,
+    )
+
+    assert memory.confidence_level is ConfidenceLevel.HIGH
+    # Writing a value is itself a verification: it was true just now.
+    assert memory.last_verified_at is not None
+
+
+def test_an_inferred_memory_reads_as_low_confidence(memory_store: MemoryStore) -> None:
+    memory = memory_store.create(
+        type=MemoryType.FACT, key="guess", value={"a": 1}, source=MemorySource.MISSION
+    )
+
+    assert memory.confidence_level is ConfidenceLevel.LOW
+
+
+def test_an_old_unverified_memory_decays_to_medium() -> None:
+    """§3: old-but-unverified is exactly where live evidence should win."""
+    from nexus_mac_mcp.core.memory_types import confidence_level
+
+    assert confidence_level(1.0, age_days=0) is ConfidenceLevel.HIGH
+    assert confidence_level(1.0, age_days=365) is ConfidenceLevel.MEDIUM
+
+
+def test_verifying_resets_the_decay_clock(memory_store: MemoryStore) -> None:
+    memory = memory_store.create(
+        type=MemoryType.PROJECT, key="nexus", value={"path": "/x"},
+        source=MemorySource.USER,
+    )
+
+    verified = memory_store.verify(memory.id)
+
+    assert verified.last_verified_at is not None
+    assert verified.confidence_level is ConfidenceLevel.HIGH
+    # Being right once does not make a memory *more* true.
+    assert verified.confidence == memory.confidence
+
+
+def test_a_contradicted_memory_is_marked_stale_but_kept(memory_store: MemoryStore) -> None:
+    memory = memory_store.create(
+        type=MemoryType.WORKSPACE, key="backend", value={"port": 8000},
+        source=MemorySource.USER,
+    )
+
+    stale = memory_store.mark_stale(memory.id)
+
+    assert stale.status is MemoryStatus.STALE
+    assert stale.to_public_dict()["stale"] is True
+    # Retained, not deleted: the user decides whether to forget it.
+    assert memory_store.get(memory_id=memory.id) is not None
+
+
+def test_saving_over_a_stale_memory_revives_it(memory_store: MemoryStore) -> None:
+    memory = memory_store.create(
+        type=MemoryType.WORKSPACE, key="backend", value={"port": 8000},
+        source=MemorySource.USER,
+    )
+    memory_store.mark_stale(memory.id)
+
+    updated = memory_store.create(
+        type=MemoryType.WORKSPACE, key="backend", value={"port": 8123},
+        source=MemorySource.USER,
+    )
+
+    assert updated.id == memory.id
+    assert updated.status is MemoryStatus.ACTIVE
+    assert updated.value == {"port": 8123}
+
+
+def test_a_stale_memory_can_still_be_forgotten(memory_store: MemoryStore) -> None:
+    memory = memory_store.create(
+        type=MemoryType.FACT, key="wrong", value={}, source=MemorySource.USER
+    )
+    memory_store.mark_stale(memory.id)
+
+    assert len(memory_store.delete(wipe_all=True)) == 1
+
+
+def test_the_new_memory_types_round_trip(memory_store: MemoryStore) -> None:
+    for memory_type in (MemoryType.DECISION, MemoryType.TASK_CONTEXT):
+        memory = memory_store.create(
+            type=memory_type, key=f"k_{memory_type}", value={"a": 1},
+            source=MemorySource.USER,
+        )
+        assert memory_store.get(memory_id=memory.id).type is memory_type
+
+
+def test_an_older_database_gains_the_new_column_without_losing_rows(
+    tmp_path: Path,
+) -> None:
+    """A real `~/.nexus/nexus.db` predates last_verified_at."""
+    import sqlite3
+
+    path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE memories (
+            id TEXT PRIMARY KEY, type TEXT NOT NULL, key TEXT NOT NULL,
+            value_json TEXT NOT NULL, source TEXT NOT NULL, confidence REAL NOT NULL,
+            status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        """
+    )
+    conn.execute(
+        "INSERT INTO memories VALUES ('mem_old','PROJECT','legacy','{}','USER',1.0,"
+        "'ACTIVE','2026-01-01T00:00:00+00:00','2026-01-01T00:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    store = MemoryStore(path)
+
+    survivor = store.get(key="legacy")
+    assert survivor is not None
+    assert survivor.last_verified_at is None
+    # Old and never verified, so it must not claim HIGH confidence.
+    assert survivor.confidence_level is not ConfidenceLevel.HIGH

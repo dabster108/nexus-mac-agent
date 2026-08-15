@@ -50,6 +50,7 @@ async def test_the_client_lists_the_mac_tools(settings: Settings) -> None:
         "check_local_service",
         "list_memories",
         "get_memory",
+        "verify_memory",
         "save_memory",
         "delete_memory",
     }
@@ -209,7 +210,7 @@ async def test_every_discovered_tool_is_classified(settings: Settings) -> None:
         await registry.refresh()
         tools = registry.list_tools()
 
-    assert len(tools) == 23
+    assert len(tools) == 24
     assert all(tool.permission in PermissionLevel for tool in tools)
     assert not [tool for tool in tools if tool.permission is PermissionLevel.RESTRICTED]
 
