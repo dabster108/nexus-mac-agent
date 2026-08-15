@@ -55,6 +55,12 @@ class EventType(StrEnum):
     OBSERVATION_CREATED = "observation_created"
     OBSERVATION_DISMISSED = "observation_dismissed"
 
+    # --- suggestions: a next step offered to the user. Never an action — the
+    # user accepting one produces an ordinary chat message.
+    SUGGESTION_CREATED = "suggestion_created"
+    SUGGESTION_DISMISSED = "suggestion_dismissed"
+    SUGGESTION_EXPIRED = "suggestion_expired"
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()

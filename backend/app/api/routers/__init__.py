@@ -8,6 +8,7 @@ from app.api.routers import (
     memory,
     models,
     observations,
+    suggestions,
     permissions,
     tasks,
     tools,
@@ -23,6 +24,7 @@ ALL_ROUTERS = (
     context.router,
     memory.router,
     observations.router,
+    suggestions.router,
     mcp.router,
     models.router,
 )
@@ -36,6 +38,7 @@ __all__ = [
     "memory",
     "models",
     "observations",
+    "suggestions",
     "permissions",
     "tasks",
     "tools",

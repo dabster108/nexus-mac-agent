@@ -347,10 +347,29 @@ class AgentRunner:
             return SYSTEM_PROMPT
 
         self._contexts[task_id] = context
+        self._consider_memory_suggestion(text, context)
         block = context.to_prompt_block(budget.max_chars, budget.max_memory_chars)
         if not block:
             return SYSTEM_PROMPT
         return f"{SYSTEM_PROMPT}\n\n{block}"
+
+    @staticmethod
+    def _consider_memory_suggestion(text: str, context: PlanningContext) -> None:
+        """Offer to remember a durable fact the user just stated.
+
+        Only ever *offers*: accepting sends an ordinary "Remember that ..."
+        message, where save_memory is CONFIRM. Best-effort, so a request never
+        depends on it.
+        """
+        try:
+            from app.suggestions.engine import get_suggestion_engine
+
+            active = context.active_workspace
+            get_suggestion_engine().consider_message(
+                text, workspace=active.path if active else None
+            )
+        except Exception:  # noqa: BLE001 - suggesting must not affect the run
+            logger.warning("Could not consider a memory suggestion", exc_info=True)
 
     def context_for(self, task_id: str) -> PlanningContext | None:
         """The context gathered for a task, for the /api/context endpoint."""

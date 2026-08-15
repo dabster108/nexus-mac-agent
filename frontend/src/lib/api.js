@@ -43,6 +43,33 @@ export async function dismissObservation(observationId) {
   return response.json();
 }
 
+export async function fetchSuggestions(options) {
+  return get("/api/suggestions?limit=20", options);
+}
+
+export async function dismissSuggestion(suggestionId) {
+  const response = await fetch(
+    `${BASE}/api/suggestions/${suggestionId}/dismiss`,
+    { method: "POST" },
+  );
+  if (!response.ok) throw new Error("Could not dismiss that.");
+  return response.json();
+}
+
+/**
+ * Records that a suggestion was taken up. Executes nothing: the caller sends
+ * the suggestion's own prompt to /api/chat, which is the only path to an
+ * action and keeps the ordinary approval flow in place.
+ */
+export async function acceptSuggestion(suggestionId) {
+  const response = await fetch(
+    `${BASE}/api/suggestions/${suggestionId}/accept`,
+    { method: "POST" },
+  );
+  if (!response.ok) throw new Error("Could not accept that.");
+  return response.json();
+}
+
 export async function fetchTask(taskId, options) {
   return get(`/api/tasks/${taskId}`, options);
 }

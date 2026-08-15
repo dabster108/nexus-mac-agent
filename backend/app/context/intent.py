@@ -28,6 +28,10 @@ class Intent(StrEnum):
     RECALL = "RECALL"
     """"What do you remember?" Memory only — no filesystem work at all."""
 
+    INVESTIGATE = "INVESTIGATE"
+    """"Investigate this." The observation is the starting point, and the
+    workspace and processes are where the evidence lives."""
+
     RECENT = "RECENT"
     """"What happened recently?" Answered from what NEXUS already noticed —
     the observations are the evidence, so no fresh inspection is needed."""
@@ -92,6 +96,16 @@ _PATTERNS: tuple[tuple[Intent, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        Intent.INVESTIGATE,
+        re.compile(
+            r"\binvestigate\b|"
+            r"\bwhy did (?:it|this|that|the \w+) (?:crash|fail|stop|die|exit)\b|"
+            r"\blook into (?:this|it|that)\b|"
+            r"\bcheck (?:this|it) out\b|"
+            r"\bwhat went wrong\b"
+        ),
+    ),
+    (
         Intent.RECENT,
         re.compile(
             r"\bwhat happened\b|"
@@ -137,6 +151,12 @@ _PLANS: dict[Intent, ContextPlan] = {
     # question is about what already happened, and re-scanning now would
     # describe the present rather than the recent past.
     Intent.RECENT: ContextPlan(Intent.RECENT, observations=True),
+    # The observation says what happened; the live state says whether it is
+    # still true. An investigation needs both, and no Git history.
+    Intent.INVESTIGATE: ContextPlan(
+        Intent.INVESTIGATE, observations=True, processes=True, workspace=True,
+        memories=True,
+    ),
     Intent.GENERAL: ContextPlan(Intent.GENERAL, memories=True),
 }
 

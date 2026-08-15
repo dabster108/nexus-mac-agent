@@ -42,6 +42,7 @@ TAGS_METADATA = [
     {"name": "context", "description": "What NEXUS can currently see. Read-only."},
     {"name": "memory", "description": "What NEXUS remembers. Read-only; forgetting goes through approval."},
     {"name": "observations", "description": "What NEXUS noticed on its own. Read-only."},
+    {"name": "suggestions", "description": "Next steps NEXUS offers. Read-only; accepting sends an ordinary chat message."},
     {"name": "mcp", "description": "MCP server status."},
     {"name": "models", "description": "Configured model providers."},
 ]
