@@ -312,3 +312,39 @@ class ObservationResponse(BaseModel):
 class ObservationListResponse(BaseModel):
     observations: list[ObservationResponse]
     count: int
+
+
+# --- suggestions (Phase 12) ------------------------------------------------
+
+
+class SuggestedActionResponse(BaseModel):
+    """What accepting a suggestion would *ask about*.
+
+    Note what is absent: no tool name and no arguments. A suggestion describes
+    a question to put to the agent, never a call to make.
+    """
+
+    intent: str = Field(examples=["investigate_process"])
+    prompt: str = Field(description="The message the client sends to /api/chat.")
+    process_id: str | None = None
+    memory_key: str | None = None
+    workspace: str | None = None
+
+
+class SuggestionResponse(BaseModel):
+    suggestion_id: str = Field(examples=["sug_1a2b3c4d5e6f"])
+    category: str = Field(examples=["PROCESS"])
+    severity: str = Field(examples=["ERROR"])
+    title: str
+    description: str
+    reason: str = Field(description="Why NEXUS thinks this matters.")
+    suggested_action: SuggestedActionResponse
+    observation_id: str | None = None
+    status: str = Field(examples=["PENDING"])
+    created_at: str
+    expires_at: str
+
+
+class SuggestionListResponse(BaseModel):
+    suggestions: list[SuggestionResponse]
+    count: int

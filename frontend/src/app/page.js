@@ -49,11 +49,14 @@ export default function Home() {
     messages,
     pending,
     observations,
+    suggestions,
     busy,
     error,
     send,
     decide,
     dismiss,
+    dismissSuggestion,
+    acceptSuggestion,
     stop,
   } = useNexus();
 
@@ -74,8 +77,11 @@ export default function Home() {
           <ContextPanel context={context} />
           <ActivityPanel
             observations={observations}
+            suggestions={suggestions}
             onSend={send}
             onDismiss={dismiss}
+            onAcceptSuggestion={acceptSuggestion}
+            onDismissSuggestion={dismissSuggestion}
           />
           <MemoryPanel memories={memories} onSend={send} />
           <Timeline events={events} />

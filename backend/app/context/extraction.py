@@ -48,11 +48,51 @@ _PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
 )
 
 #: If any of these appear, the sentence is about a moment rather than a fact.
+#:
+#: "is running" earns its place here: §8's whole example turns on the
+#: difference between "the backend *runs* on 8000" (how it is set up) and "the
+#: backend *is running* on 8000" (what is true this minute). The second is
+#: something to check, not something to remember.
 _TRANSIENT = re.compile(
     r"\b(broken|failing|failed|down|crashed|stuck|hanging|slow|weird|"
     r"might|maybe|perhaps|thinking of|planning to|should we|used to|"
-    r"was |were |yesterday|earlier|temporarily|for now|just testing)\b",
+    r"was |were |yesterday|earlier|temporarily|for now|just testing|"
+    r"is running|are running|is up|is live|currently)\b",
     re.I,
+)
+
+#: Phrases that mark a statement as a standing fact rather than a passing one.
+#: With one of these present, a wider range of sentences is worth offering to
+#: remember; without one, only the narrow patterns above qualify.
+_DURABLE = re.compile(
+    r"\b(from now on|usually|normally|generally|always|by default|"
+    r"i prefer|we prefer|i like|we use|i use|our convention|"
+    r"remember that|keep in mind)\b",
+    re.I,
+)
+
+#: The parts of a project a fact is usually *about*. Used to name the memory
+#: after its subject rather than after whichever word happened to precede it.
+_SUBJECTS = (
+    "backend", "frontend", "api", "server", "database", "db", "worker",
+    "client", "app", "service", "proxy", "gateway",
+)
+
+#: Statements of preference or convention, allowed only alongside a durable
+#: marker. The marker is what makes them a rule rather than a remark.
+_DURABLE_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
+    (
+        "DECISION",
+        "port",
+        re.compile(r"\bport (?P<value>\d{2,5})\b", re.I),
+    ),
+    (
+        "USER_PREFERENCE",
+        "tool",
+        re.compile(
+            r"\b(?:i|we) (?:prefer|like|use)\s+(?P<value>[\w.+-]{2,30})", re.I
+        ),
+    ),
 )
 
 #: A question is not a statement of fact, however much it looks like one.
@@ -86,6 +126,28 @@ def suggest(message: str, *, workspace: str | None = None) -> MemorySuggestion |
     text = (message or "").strip()
     if not text or _QUESTION.search(text) or _TRANSIENT.search(text):
         return None
+
+    # A durable marker ("from now on", "we always") widens what counts, because
+    # the user has said outright that this is how things are rather than how
+    # they happen to be right now.
+    if _DURABLE.search(text):
+        for memory_type, field, pattern in _DURABLE_PATTERNS:
+            match = pattern.search(text)
+            if not match:
+                continue
+            value = match.group("value")
+            lowered = text.casefold()
+            subject = next((s for s in _SUBJECTS if s in lowered), "")
+            key = f"{subject}_{field}" if subject else field
+            payload: dict = {field: int(value) if value.isdigit() else value}
+            if workspace:
+                payload["path"] = workspace
+            return MemorySuggestion(
+                type=memory_type,
+                key=key,
+                value=payload,
+                reason=f"you said this is how you usually work ({field} {value})",
+            )
 
     for memory_type, field, pattern in _PATTERNS:
         match = pattern.search(text)

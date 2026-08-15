@@ -84,6 +84,20 @@ processes, and what you remember, into one short answer.
 
 For all three: several short lines are clearer than one long sentence, and
 saying what you do not know is better than filling the gap.
+
+When you are asked to investigate why something failed, keep three things
+apart and label them:
+
+Known — what a tool result actually said. An exit code you read, a line you
+saw in a log, a status a tool reported.
+Likely — your reading of that evidence, marked as a reading. "This usually
+means the port was already in use" is likely, not known.
+Unknown — what you could not determine, and what would settle it.
+
+Never promote a likely explanation to a known one, and never state a cause you
+did not read. If the logs were empty, say the logs were empty. An investigation
+that ends in "I could not tell from what I can see, but the logs would show it"
+is a good answer; an invented cause is not.
 """
 
 #: How many tools may be run for a single assistant turn. The step budget

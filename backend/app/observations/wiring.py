@@ -14,6 +14,9 @@ from app.observations.detector import Detector, get_detector
 from app.observations.publisher import attach
 from app.observations.scheduler import ObservationScheduler
 from app.observations.store import get_observation_store
+from app.suggestions.engine import get_suggestion_engine
+from app.suggestions.publisher import attach as attach_suggestions
+from app.suggestions.store import get_suggestion_store
 from app.tools.registry import ToolRegistry
 
 logger = get_logger(__name__)
@@ -36,7 +39,14 @@ def build_scheduler(
     """The detector, its delivery path and its timer, wired together."""
     detector = detector or get_detector()
     tasks = tasks or get_task_store()
-    attach(get_observation_store(), tasks)
+    observations = get_observation_store()
+    attach(observations, tasks)
+
+    # Suggestions listen to observations rather than being produced by the
+    # detector, so noticing keeps working identically if nothing is listening.
+    suggestions = get_suggestion_store()
+    attach_suggestions(suggestions, tasks)
+    get_suggestion_engine().attach_to(observations)
 
     for name, url in DEFAULT_SERVICES:
         detector.register_service(name, url)

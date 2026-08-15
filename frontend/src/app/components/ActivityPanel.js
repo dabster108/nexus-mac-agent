@@ -1,6 +1,7 @@
 "use client";
 
 import { relativeTime } from "@/lib/format";
+import { SuggestionCard } from "./SuggestionCard";
 
 /**
  * What NEXUS noticed on its own.
@@ -72,7 +73,14 @@ function Entry({ observation, onSend, onDismiss }) {
   );
 }
 
-export function ActivityPanel({ observations, onSend, onDismiss }) {
+export function ActivityPanel({
+  observations,
+  suggestions = [],
+  onSend,
+  onDismiss,
+  onAcceptSuggestion,
+  onDismissSuggestion,
+}) {
   const attention = observations.filter((item) =>
     ["ERROR", "WARNING"].includes(item.severity),
   ).length;
@@ -89,6 +97,22 @@ export function ActivityPanel({ observations, onSend, onDismiss }) {
           </span>
         )}
       </header>
+
+      {suggestions.length > 0 ? (
+        <div className="border-b border-[var(--line)] p-2">
+          <p className="panel-head mb-1.5 px-1">Suggested</p>
+          <ul className="space-y-1.5">
+            {suggestions.map((suggestion) => (
+              <SuggestionCard
+                key={suggestion.suggestion_id}
+                suggestion={suggestion}
+                onAccept={onAcceptSuggestion}
+                onDismiss={onDismissSuggestion}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {observations.length === 0 ? (
         <p className="px-3 py-3 text-[12px] leading-5 text-[var(--ink-3)]">

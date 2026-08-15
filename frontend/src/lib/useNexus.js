@@ -13,13 +13,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   WS_URL,
+  acceptSuggestion,
   cancelTask,
   dismissObservation,
+  dismissSuggestion,
   fetchContext,
   fetchHealth,
   fetchMemories,
   fetchObservations,
   fetchPending,
+  fetchSuggestions,
   fetchTask,
   resolvePermission,
   sendMessage,
@@ -36,6 +39,7 @@ export function useNexus() {
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState([]);
   const [observations, setObservations] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -45,14 +49,16 @@ export function useNexus() {
   // --- panels ------------------------------------------------------------
   const refreshPanels = useCallback(async (signal) => {
     try {
-      const [ctx, mem, obs] = await Promise.all([
+      const [ctx, mem, obs, sug] = await Promise.all([
         fetchContext({ signal }),
         fetchMemories({ signal }),
         fetchObservations({ signal }),
+        fetchSuggestions({ signal }),
       ]);
       setContext(ctx);
       setMemories(mem.memories ?? []);
       setObservations(obs.observations ?? []);
+      setSuggestions(sug.suggestions ?? []);
       setOnline(true);
     } catch (err) {
       if (err?.name !== "AbortError") setOnline(false);
@@ -122,6 +128,26 @@ export function useNexus() {
               (item) => item.observation_id !== event.observation.observation_id,
             ),
           ]);
+          return;
+        }
+        if (event.type === "suggestion_created" && event.suggestion) {
+          setSuggestions((current) => [
+            event.suggestion,
+            ...current.filter(
+              (item) => item.suggestion_id !== event.suggestion.suggestion_id,
+            ),
+          ]);
+          return;
+        }
+        if (
+          ["suggestion_dismissed", "suggestion_expired"].includes(event.type) &&
+          event.suggestion
+        ) {
+          setSuggestions((current) =>
+            current.filter(
+              (item) => item.suggestion_id !== event.suggestion.suggestion_id,
+            ),
+          );
           return;
         }
         if (event.type === "observation_dismissed" && event.observation) {
@@ -232,6 +258,41 @@ export function useNexus() {
     }
   }, []);
 
+  /**
+   * Taking up a suggestion. Two separate things, in this order:
+   * the suggestion's own prompt goes to /api/chat exactly as if it had been
+   * typed, and the suggestion is marked accepted so it stops being offered.
+   * Nothing here executes anything — the agent decides which tools to use,
+   * and a CONFIRM tool still raises the ordinary approval prompt.
+   */
+  const acceptSuggestionById = useCallback(
+    async (suggestion) => {
+      const prompt = suggestion?.suggested_action?.prompt;
+      if (!prompt) return;
+      setSuggestions((current) =>
+        current.filter((item) => item.suggestion_id !== suggestion.suggestion_id),
+      );
+      send(prompt);
+      try {
+        await acceptSuggestion(suggestion.suggestion_id);
+      } catch {
+        /* the message is already on its way; the record is cosmetic */
+      }
+    },
+    [send],
+  );
+
+  const dismissSuggestionById = useCallback(async (suggestionId) => {
+    setSuggestions((current) =>
+      current.filter((item) => item.suggestion_id !== suggestionId),
+    );
+    try {
+      await dismissSuggestion(suggestionId);
+    } catch {
+      /* the panel poll restores it if the call really failed */
+    }
+  }, []);
+
   const stop = useCallback(async () => {
     const taskId = activeTask.current;
     if (!taskId) return;
@@ -250,11 +311,14 @@ export function useNexus() {
     messages,
     pending,
     observations,
+    suggestions,
     busy,
     error,
     send,
     decide,
     dismiss,
+    dismissSuggestion: dismissSuggestionById,
+    acceptSuggestion: acceptSuggestionById,
     stop,
     refreshPanels,
   };

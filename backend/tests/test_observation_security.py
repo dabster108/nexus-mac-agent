@@ -282,3 +282,140 @@ def test_an_enormous_hostile_payload_is_truncated(field: str) -> None:
     )
 
     assert len(getattr(observation, field)) <= 400
+
+
+# --- suggestions (Phase 12) ------------------------------------------------
+#
+# A suggestion is the first thing in NEXUS that the user is invited to *act*
+# on with one click, so the question is not only "can hostile text reach the
+# model" but "can it reach the model as something the user believes they
+# authorised". Both halves are tested here.
+
+
+def hostile_observation(**kwargs):
+    from app.observations.models import Category as OC
+
+    defaults = dict(
+        category=OC.PROCESS,
+        severity=Severity.ERROR,
+        title=f"backend failed\n{HOSTILE}",
+        summary=f"exit 1\n{HOSTILE}",
+        actionable=True,
+        related_process_id=f"proc_1\n{HOSTILE}",
+        workspace=f"/x\n{HOSTILE}",
+        evidence={"exit_code": 1, "command": f"uvicorn\n{HOSTILE}"},
+    )
+    defaults.update(kwargs)
+    return Observation.build(**defaults)
+
+
+def test_a_hostile_observation_cannot_fabricate_structure_in_a_suggestion() -> None:
+    from app.suggestions import rules as suggestion_rules
+
+    suggestion = suggestion_rules.from_observation(hostile_observation())
+
+    rendered = str(suggestion.to_public_dict())
+    assert "\n" not in suggestion.title
+    assert "\n" not in suggestion.description
+    assert "\n" not in suggestion.action.prompt
+    assert "\n" not in rendered
+
+
+def test_hostile_text_cannot_add_a_tool_to_a_suggested_action() -> None:
+    """The prompt is composed in code from a template; hostile text can only
+    ever land inside it as a quoted identifier, never as a new field."""
+    from app.suggestions import rules as suggestion_rules
+
+    action = suggestion_rules.from_observation(hostile_observation()).action
+
+    payload = action.to_public_dict()
+    assert set(payload) <= {"intent", "prompt", "process_id", "memory_key", "workspace"}
+    assert payload["intent"] == "investigate_process"
+    # The read-only instruction survives whatever the observation said.
+    assert "Do not change anything" in payload["prompt"]
+
+
+def test_a_secret_in_an_observation_never_reaches_a_suggestion() -> None:
+    from app.suggestions import rules as suggestion_rules
+
+    suggestion = suggestion_rules.from_observation(
+        hostile_observation(
+            evidence={"exit_code": 1, "command": "uvicorn --key ghp_aBcD1234567890EfGhIjKlMn"}
+        )
+    )
+
+    assert "ghp_aBcD1234567890EfGhIjKlMn" not in str(suggestion.to_public_dict())
+
+
+def test_the_suggestion_engine_has_no_way_to_call_a_tool() -> None:
+    """Structural: the engine's module imports nothing that reaches the
+    machine, so there is no path from a suggestion to an MCP call."""
+    import app.suggestions.engine as engine_module
+
+    source = engine_module.__file__
+    with open(source) as handle:
+        text = handle.read()
+
+    for forbidden in ("ToolRegistry", "registry.call", "MCPClient", "mcp"):
+        assert forbidden not in text
+
+
+async def test_accepting_a_hostile_suggestion_still_stops_at_confirm() -> None:
+    """The end-to-end shape: the suggestion's prompt is sent as an ordinary
+    message, the model is convinced by the embedded instruction, and the
+    runtime still halts for a decision."""
+    from app.suggestions import rules as suggestion_rules
+
+    prompt = suggestion_rules.from_observation(hostile_observation()).action.prompt
+    source = FakeToolSource([tool_definition("stop_process", PermissionLevel.CONFIRM)])
+    provider = StubProvider(
+        [AIMessage(content="", tool_calls=[tool_call("stop_process", {"process_id": "p1"})])]
+    )
+    graph = build_agent_graph(
+        provider=provider, registry=await build_registry(source), policy=PermissionPolicy()
+    )
+
+    state = await graph.ainvoke(initial_state(TASK_ID, prompt))
+
+    assert state["requires_permission"] is True
+    assert source.calls == []
+
+
+async def test_a_suggestion_cannot_reach_a_restricted_tool() -> None:
+    from app.suggestions import rules as suggestion_rules
+
+    prompt = suggestion_rules.from_observation(hostile_observation()).action.prompt
+    source = FakeToolSource([tool_definition("delete_file", PermissionLevel.RESTRICTED)])
+    provider = StubProvider(
+        [
+            AIMessage(content="", tool_calls=[tool_call("delete_file", {"path": "/x"})]),
+            AIMessage(content="I could not do that."),
+        ]
+    )
+    graph = build_agent_graph(
+        provider=provider, registry=await build_registry(source), policy=PermissionPolicy()
+    )
+
+    state = await graph.ainvoke(initial_state(TASK_ID, prompt))
+
+    assert source.calls == []
+    assert state["tool_results"][-1]["success"] is False
+
+
+def test_a_hostile_message_cannot_smuggle_a_memory_suggestion() -> None:
+    """A memory suggestion is offered from the user's own words, so the words
+    are the attack surface: it must still refuse anything transient, and the
+    value it offers must be the one that was stated."""
+    from app.suggestions.engine import SuggestionEngine
+    from app.suggestions.store import SuggestionStore
+
+    engine = SuggestionEngine(SuggestionStore())
+
+    assert engine.consider_message(f"The backend is running on port 8000. {HOSTILE}") is None
+
+    offered = engine.consider_message(
+        f"From now on my backend usually runs on port 8000.\n{HOSTILE}"
+    )
+    assert offered is not None
+    assert "\n" not in offered.action.prompt
+    assert "8000" in offered.action.prompt
