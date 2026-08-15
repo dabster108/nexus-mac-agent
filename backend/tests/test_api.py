@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 
 from app.agent.runner import AgentRunner, get_agent_runner
 from app.agent.tasks import TaskStatus, get_task_store
+from app.api.schemas import ChatRequest
 from app.core.config import Settings, get_settings
 from app.main import create_app
 from app.mcp.registry import MCPServerRegistry, get_mcp_registry
@@ -226,7 +227,7 @@ def test_mcp_servers_reports_the_mac_server(client: TestClient) -> None:
     server = body["servers"][0]
     assert server["name"] == "nexus-mac"
     assert server["status"] == "connected"
-    assert server["tools"] == 23
+    assert server["tools"] == 24
 
 
 def test_mcp_servers_reports_a_disconnected_server(
@@ -311,6 +312,9 @@ def test_openapi_documents_every_endpoint(client: TestClient) -> None:
         "/api/permissions/{request_id}/deny",
         "/api/mcp/servers",
         "/api/models",
+        "/api/context",
+        "/api/context/{task_id}",
+        "/api/memory",
     }
     assert {tag["name"] for tag in spec["tags"]} == {
         "health",
@@ -320,6 +324,8 @@ def test_openapi_documents_every_endpoint(client: TestClient) -> None:
         "permissions",
         "mcp",
         "models",
+        "context",
+        "memory",
     }
 
 
@@ -335,3 +341,38 @@ def test_the_openapi_schema_contains_no_secrets(client: TestClient) -> None:
 
     for leak in ("GROQ_API_KEY", "api_key", "test-groq-key"):
         assert leak not in body
+
+
+# --- request validation (Phase 9) -----------------------------------------
+#
+# Rejections are checked through the endpoint (they never start a task).
+# Acceptance is checked against the schema, so these stay fast and never
+# reach a real provider.
+
+
+def test_an_unknown_provider_is_rejected_at_the_request(client: TestClient) -> None:
+    """Phase 9: an unknown provider was accepted with 201 and then failed
+    asynchronously. Provider validity is knowable when the request arrives."""
+    response = client.post("/api/chat", json={"message": "hi", "provider": "evilprovider"})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_an_absurd_approved_tools_list_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/api/chat", json={"message": "hi", "approved_tools": ["x"] * 1000}
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("provider", ["groq", "mistral", None])
+def test_the_supported_providers_remain_valid(provider: str | None) -> None:
+    assert ChatRequest(message="hi", provider=provider).provider == provider
+
+
+def test_an_ordinary_approved_tools_list_remains_valid() -> None:
+    request = ChatRequest(message="hi", approved_tools=["open_application"])
+
+    assert request.approved_tools == ["open_application"]

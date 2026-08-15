@@ -33,7 +33,7 @@ from app.agent.events import EventSink, EventType
 from app.agent.graph import build_agent_graph
 from app.agent.state import initial_state
 from app.agent.tasks import TaskRecord, TaskStore
-from app.context.collector import ContextCollector
+from app.context.intent import MISSION_PLAN
 from app.context.memory_events import emit_memory_outcome_events
 from app.context.models import ContextBudget
 from app.core.errors import ErrorCode
@@ -217,12 +217,21 @@ class MissionEngine:
         mission_emit = self._sink_for(mission_record)
         mission_emit(ev.mission_started(mission.task_id, mission.id, mission.objective))
 
+        # Imported here rather than at module scope: the collector imports
+        # `app.agent` for the event vocabulary, `app.agent` imports the runner,
+        # and the runner imports this package — a cycle that fires whenever
+        # `app.context` happens to be imported before `app.agent`.
+        from app.context.collector import ContextCollector
+
         collector = ContextCollector(
             registry,
             max_memories=self._context_budget.max_memories,
             max_workspace_facts=self._context_budget.max_workspace_facts,
+            budget=self._context_budget,
         )
-        context = await collector.collect(mission.objective, mission.task_id, mission_emit)
+        context = await collector.collect(
+            mission.objective, mission.task_id, mission_emit, plan=MISSION_PLAN
+        )
         # Seed from context, not authority: a step's own fresh tool result
         # (via _extract_context, below) always overwrites these as it arrives.
         for workspace in context.workspaces:

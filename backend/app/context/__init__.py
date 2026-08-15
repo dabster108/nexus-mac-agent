@@ -1,29 +1,14 @@
 """Structured context: memory, workspace and machine state assembled before
-planning, plus the memory-awareness event wrapper used by both ordinary chat
-and missions."""
+the agent runs.
 
-from app.context.collector import ContextCollector
-from app.context.memory_events import (
-    MEMORY_CONFIRM_TOOLS,
-    describe_proposal,
-    emit_memory_outcome_events,
-)
-from app.context.models import (
-    ContextBudget,
-    MachineContext,
-    PlanningContext,
-    RetrievedMemory,
-    WorkspaceContext,
-)
+This package deliberately re-exports nothing. Its modules sit at the bottom of
+a cycle — the collector and the memory-event wrapper both reach into
+:mod:`app.agent` for the event vocabulary, :mod:`app.agent` imports the runner,
+and the runner reaches the mission engine, which comes back here. Any eager
+import in this file puts that loop on the path of *every* ``app.context``
+import, so which module happens to be imported first decides whether the
+application starts.
 
-__all__ = [
-    "MEMORY_CONFIRM_TOOLS",
-    "ContextBudget",
-    "ContextCollector",
-    "MachineContext",
-    "PlanningContext",
-    "RetrievedMemory",
-    "WorkspaceContext",
-    "describe_proposal",
-    "emit_memory_outcome_events",
-]
+Import the submodule you need directly (``app.context.collector``,
+``app.context.models``, ...), which is what every caller already does.
+"""

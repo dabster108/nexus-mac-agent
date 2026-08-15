@@ -58,6 +58,7 @@ async def test_the_server_runs_as_a_real_stdio_subprocess() -> None:
         "check_local_service",
         "list_memories",
         "get_memory",
+        "verify_memory",
         "save_memory",
         "delete_memory",
     }

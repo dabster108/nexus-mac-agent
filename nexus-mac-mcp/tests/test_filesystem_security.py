@@ -178,6 +178,45 @@ def test_ordinary_files_are_not_flagged(name: str) -> None:
     assert is_secret_file(Path(f"/somewhere/{name}")) is False
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        # Plain-text `https://user:token@host`, and the cargo/terraform/gcloud
+        # spellings of the same idea.
+        ".git-credentials",
+        "credentials.toml",
+        "credentials.tfrc.json",
+        # Shell and REPL history: a pasted `export TOKEN=...` lives here forever.
+        ".zsh_history",
+        ".bash_history",
+        ".python_history",
+        ".mysql_history",
+        ".psql_history",
+        # Service configs that carry a token rather than pointing at one.
+        "rclone.conf",
+        "login.keychain-db",
+        "github.token",
+    ],
+)
+def test_credential_bearing_files_found_in_the_audit_are_blocked(name: str) -> None:
+    """Phase 9: every one of these was readable, inside $HOME and unflagged."""
+    assert is_secret_file(Path(f"/somewhere/{name}")) is True
+
+
+@pytest.mark.parametrize(
+    "name", ["history.md", ".gitconfig", "credentials_helper.py", "my.credentials.md"]
+)
+def test_the_widened_secret_patterns_do_not_catch_ordinary_files(name: str) -> None:
+    assert is_secret_file(Path(f"/somewhere/{name}")) is False
+
+
+def test_the_github_cli_token_directory_is_denied() -> None:
+    """`hosts.yml` is too generic a name to blocklist, so the directory is."""
+    assert is_allowed_path(Path.home() / ".config/gh/hosts.yml") is False
+    # Neighbouring config stays reachable.
+    assert is_allowed_path(Path.home() / ".config/myapp/settings.json") is True
+
+
 def test_secret_names_match_regardless_of_case() -> None:
     assert is_secret_file(Path("/x/ID_RSA")) is True
     assert is_secret_file(Path("/x/Server.PEM")) is True

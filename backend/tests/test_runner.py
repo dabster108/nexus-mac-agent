@@ -66,7 +66,10 @@ async def test_a_full_run_calls_a_real_mcp_tool(settings: Settings) -> None:
     assert record.task_id.startswith("task_")
 
     types = [str(event.type) for event in record.events]
-    assert types == [
+    # Phase 10 gathers context before the model runs, so the run now opens with
+    # context events. The execution sequence itself is unchanged.
+    assert types[0] == EventType.TASK_STARTED
+    assert [t for t in types if not t.startswith(("memory_", "context_", "workspace_"))] == [
         EventType.TASK_STARTED,
         EventType.TOOL_REQUESTED,
         EventType.TOOL_STARTED,

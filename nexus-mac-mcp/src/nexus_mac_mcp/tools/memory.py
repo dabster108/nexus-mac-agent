@@ -45,8 +45,8 @@ def list_memories(
     store: MemoryStore | None = None,
 ) -> dict[str, Any]:
     """List/search memories. Staleness is reported, never hidden."""
-    store = store or get_memory_store()
     try:
+        store = store or get_memory_store()
         parsed_type = _parse_type(type)
         memories = store.list(type=parsed_type, query=query, limit=limit)
     except MemoryError as exc:
@@ -68,8 +68,8 @@ def get_memory(
     store: MemoryStore | None = None,
 ) -> dict[str, Any]:
     """Fetch one memory by id, or by (type, key)."""
-    store = store or get_memory_store()
     try:
+        store = store or get_memory_store()
         parsed_type = _parse_type(type)
         memory = store.get(memory_id=memory_id, key=key, type=parsed_type)
     except MemoryError as exc:
@@ -88,8 +88,8 @@ def save_memory(
     store: MemoryStore | None = None,
 ) -> dict[str, Any]:
     """Remember one fact. Refuses anything that looks like a credential."""
-    store = store or get_memory_store()
     try:
+        store = store or get_memory_store()
         parsed_type = _parse_type(type)
         if parsed_type is None:
             return _failure(f"A memory type is required. Use one of: {', '.join(VALID_TYPES)}.")
@@ -121,8 +121,8 @@ def delete_memory(
     ``wipe_all=True`` for everything. There is no "no filter" default that
     deletes anything.
     """
-    store = store or get_memory_store()
     try:
+        store = store or get_memory_store()
         parsed_type = _parse_type(type)
         deleted = store.delete(
             memory_id=memory_id, key=key, type=parsed_type,
@@ -136,3 +136,38 @@ def delete_memory(
         "count": len(deleted),
         "deleted_keys": [memory.key for memory in deleted],
     }
+
+
+def verify_memory(
+    memory_id: str,
+    outcome: str,
+    store: MemoryStore | None = None,
+) -> dict[str, Any]:
+    """Record what live evidence said about a memory NEXUS just checked.
+
+    Classified SAFE, which deserves justification because it does write to the
+    database. What it can do is deliberately tiny: flip a memory between
+    ACTIVE and STALE, and stamp when it was last confirmed. It cannot create a
+    memory, cannot change a remembered value, and cannot delete anything —
+    `save_memory` and `delete_memory` remain CONFIRM and remain the only way
+    to do either.
+
+    The direction of travel is what makes it safe: `stale` makes NEXUS trust
+    itself *less*, and `confirmed` only restarts a decay clock. Requiring
+    approval to write down "the thing I remembered turned out to be wrong"
+    would mean that declining the prompt leaves the wrong fact standing.
+    """
+    try:
+        store = store or get_memory_store()
+        choice = (outcome or "").strip().casefold()
+        if choice not in ("confirmed", "stale"):
+            return _failure("outcome must be 'confirmed' or 'stale'.")
+        memory = (
+            store.verify(memory_id) if choice == "confirmed" else store.mark_stale(memory_id)
+        )
+    except MemoryError as exc:
+        return _failure(str(exc))
+
+    if memory is None:
+        return _failure("No matching memory was found.")
+    return {"success": True, "memory": memory.to_public_dict()}

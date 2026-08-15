@@ -34,9 +34,10 @@ EXPECTED_TOOLS = {
     "process_logs": Permission.SAFE,
     # local services
     "check_local_service": Permission.SAFE,
-    # memory — read-only
+    # memory — read-only, plus the one narrow write that only ever lowers trust
     "list_memories": Permission.SAFE,
     "get_memory": Permission.SAFE,
+    "verify_memory": Permission.SAFE,
     # things that change something — all gated by the backend
     "open_application": Permission.CONFIRM,
     "run_command": Permission.CONFIRM,
@@ -212,3 +213,18 @@ async def test_memory_type_argument_accepts_lowercase_from_the_model() -> None:
 
     assert not result.is_error
     assert result.structured_content["success"] is True
+
+
+async def test_verify_memory_cannot_change_or_remove_a_memory() -> None:
+    """It is SAFE, so its blast radius has to stay tiny: it may only say
+    whether a memory still holds. Changing a value or deleting one stays
+    behind CONFIRM."""
+    async with Client(create_server()) as client:
+        tools = await client.list_tools()
+
+    verify = next(tool for tool in tools.tools if tool.name == "verify_memory")
+    properties = set((verify.input_schema or {}).get("properties", {}))
+
+    assert properties == {"memory_id", "outcome"}
+    # No way to express a new value or a deletion through this tool.
+    assert not properties & {"value", "key", "type", "wipe_all", "key_contains"}

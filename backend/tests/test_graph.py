@@ -318,6 +318,58 @@ async def test_the_same_tool_with_different_arguments_still_runs_twice() -> None
     ]
 
 
+async def test_an_oversized_tool_result_cannot_flood_the_transcript() -> None:
+    # Phase 9: a 2MB tool result put ~500k tokens into the next model request.
+    # The MCP tools bound their own output, but MCP_SERVER_COMMAND can point at
+    # any local server, so the backend needs its own backstop.
+    from app.agent.nodes import MAX_TOOL_RESULT_CHARS
+
+    huge = "X" * (MAX_TOOL_RESULT_CHARS * 10)
+    source = FakeToolSource(
+        [tool_definition("read_file")],
+        {"read_file": ToolResult(content=huge, structured=None)},
+    )
+    provider = StubProvider(
+        [
+            AIMessage(content="", tool_calls=[tool_call("read_file", {"path": "a"})]),
+            AIMessage(content="Done."),
+        ]
+    )
+    graph = build_agent_graph(
+        provider=provider, registry=await build_registry(source), policy=PermissionPolicy()
+    )
+
+    state = await graph.ainvoke(initial_state(TASK_ID, "read it"))
+
+    reply = [m for m in state["messages"] if isinstance(m, ToolMessage)][0]
+    assert len(reply.content) < MAX_TOOL_RESULT_CHARS + 500
+    # Truncation is announced, so the model cannot answer from half a file
+    # believing it saw all of it.
+    assert "[truncated:" in reply.content
+    assert str(len(huge)) in reply.content
+
+
+async def test_an_ordinary_tool_result_is_passed_through_untouched() -> None:
+    source = FakeToolSource(
+        [tool_definition("git_status")],
+        {"git_status": ToolResult(content="On branch main", structured=None)},
+    )
+    provider = StubProvider(
+        [
+            AIMessage(content="", tool_calls=[tool_call("git_status")]),
+            AIMessage(content="You are on main."),
+        ]
+    )
+    graph = build_agent_graph(
+        provider=provider, registry=await build_registry(source), policy=PermissionPolicy()
+    )
+
+    state = await graph.ainvoke(initial_state(TASK_ID, "status?"))
+
+    reply = [m for m in state["messages"] if isinstance(m, ToolMessage)][0]
+    assert reply.content == "On branch main"
+
+
 def test_the_system_prompt_maps_forget_language_to_delete_memory() -> None:
     # A live-observed failure: "Forget everything you know about NEXUS." was
     # answered conversationally with no delete_memory call at all. The prompt
