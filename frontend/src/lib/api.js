@@ -30,6 +30,19 @@ export async function fetchMemories(options) {
   return get("/api/memory", options);
 }
 
+export async function fetchObservations(options) {
+  return get("/api/observations?limit=50", options);
+}
+
+export async function dismissObservation(observationId) {
+  const response = await fetch(
+    `${BASE}/api/observations/${observationId}/dismiss`,
+    { method: "POST" },
+  );
+  if (!response.ok) throw new Error("Could not dismiss that.");
+  return response.json();
+}
+
 export async function fetchTask(taskId, options) {
   return get(`/api/tasks/${taskId}`, options);
 }

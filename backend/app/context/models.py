@@ -30,6 +30,7 @@ class ContextBudget:
     max_memory_chars: int = 400
     max_recent_tasks: int = 5
     max_recent_events: int = 8
+    max_observations: int = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +75,24 @@ class RetrievedMemory:
             "conflict": self.conflict,
             "reasons": list(self.reasons),
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationSnapshot:
+    """Something NEXUS noticed, quoted into the prompt.
+
+    Already sanitised by the observation store — this carries the finished
+    line rather than re-deriving it, so there is one place that decides what
+    an observation may say.
+    """
+
+    observation_id: str
+    category: str
+    severity: str
+    line: str
+
+    def to_line(self) -> str:
+        return self.line
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,6 +219,7 @@ class PlanningContext:
     truncated: bool = False
     processes: tuple[ProcessSnapshot, ...] = ()
     recent_tasks: tuple[TaskSnapshot, ...] = ()
+    observations: tuple[ObservationSnapshot, ...] = ()
     intent: str = "GENERAL"
 
     @property
@@ -217,7 +237,7 @@ class PlanningContext:
         tool's current result always outranks anything remembered here.
         """
         if not (self.memories or self.workspaces or self.machine or self.processes
-                or self.recent_tasks):
+                or self.recent_tasks or self.observations):
             return ""
 
         lines: list[str] = ["Context gathered before answering:"]
@@ -234,6 +254,12 @@ class PlanningContext:
         if self.processes:
             lines.append("Processes NEXUS started and is managing:")
             lines.extend(process.to_line() for process in self.processes)
+        if self.observations:
+            lines.append(
+                "Things NEXUS noticed on its own, newest last. These are "
+                "already-recorded facts, not a to-do list:"
+            )
+            lines.extend(item.to_line() for item in self.observations)
         if self.recent_tasks:
             lines.append("Recent requests in this session:")
             lines.extend(task.to_line() for task in self.recent_tasks)
@@ -271,6 +297,7 @@ class PlanningContext:
             "truncated": self.truncated,
             "processes": len(self.processes),
             "recent_tasks": len(self.recent_tasks),
+            "observations": len(self.observations),
             "intent": self.intent,
         }
 

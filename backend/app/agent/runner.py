@@ -485,11 +485,35 @@ class AgentRunner:
 
         return emit
 
+    @staticmethod
+    def _observe(observation: Any) -> None:
+        """Hand a lifecycle outcome to the observation store, if one is built.
+
+        Best-effort on purpose: noticing is an enhancement, and a failure here
+        must never change what a task reports. Imported lazily for the same
+        cycle reason as the context collector.
+        """
+        if observation is None:
+            return
+        try:
+            from app.observations.store import get_observation_store
+
+            get_observation_store().record(observation)
+        except Exception:  # noqa: BLE001 - observation must not affect the run
+            logger.warning("Could not record an observation", exc_info=True)
+
     def _finalise(self, record: TaskRecord, state: dict[str, Any]) -> TaskRecord:
+        from app.observations import rules
+
         task_id = record.task_id
         error = state.get("error")
         if error:
             # The graph already emitted task_error.
+            self._observe(
+                rules.task_outcome(
+                    task_id, record.request, "error", error.get("message")
+                )
+            )
             return self._tasks.finish(
                 record,
                 status=TaskStatus.ERROR,
@@ -500,6 +524,13 @@ class AgentRunner:
         permission_request = state.get("permission_request")
         if state.get("requires_permission") and permission_request:
             message = permission_request.get("reason") or "Your approval is required."
+            self._observe(
+                rules.approval_waiting(
+                    task_id,
+                    str(permission_request.get("tool") or "a tool"),
+                    message,
+                )
+            )
             self._tasks.publish(record, [ev.task_completed(task_id, message)])
             logger.info("TASK COMPLETE (awaiting permission)", extra={"task_id": task_id})
             return self._tasks.finish(

@@ -285,3 +285,30 @@ class ContextResponse(BaseModel):
     processes: list[ProcessResponse] = Field(default_factory=list)
     machine: MachineResponse | None = None
     truncated: bool = False
+
+
+# --- observations (Phase 11) -----------------------------------------------
+
+
+class ObservationResponse(BaseModel):
+    """One thing NEXUS noticed. Already sanitised and bounded by the store."""
+
+    observation_id: str = Field(examples=["obs_1a2b3c4d5e6f"])
+    category: str = Field(examples=["PROCESS"])
+    severity: str = Field(examples=["ERROR"])
+    title: str = Field(examples=["Backend failed"])
+    summary: str = ""
+    source: str = "detector"
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    workspace: str | None = None
+    related_process_id: str | None = None
+    related_task_id: str | None = None
+    related_memory_id: str | None = None
+    actionable: bool = False
+    dismissed: bool = False
+    created_at: str
+
+
+class ObservationListResponse(BaseModel):
+    observations: list[ObservationResponse]
+    count: int

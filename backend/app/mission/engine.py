@@ -47,6 +47,25 @@ from app.tools.registry import ToolDefinition, ToolRegistry, ToolResult
 
 logger = get_logger(__name__)
 
+
+def _observe_mission(
+    task_id: str, objective: str, status: str, reason: str | None
+) -> None:
+    """Record a mission's ending as an observation.
+
+    Best-effort and lazily imported, like the runner's equivalent: a mission's
+    result must not depend on whether anything was watching.
+    """
+    try:
+        from app.observations import rules
+        from app.observations.store import get_observation_store
+
+        observation = rules.mission_outcome(task_id, objective, status, reason)
+        if observation:
+            get_observation_store().record(observation)
+    except Exception:  # noqa: BLE001 - observation must not affect the mission
+        logger.warning("Could not record a mission observation", exc_info=True)
+
 #: A single mission step is "call one tool, read the result, summarise" — a
 #: much smaller budget than an ordinary chat turn needs, and small enough that
 #: a step cannot itself spiral into an open-ended tool-calling loop.
@@ -311,6 +330,8 @@ class MissionEngine:
         mission.status = status
         mission.failure_reason = reason
         summary = mission.summary()
+
+        _observe_mission(mission.task_id, mission.objective, str(status).lower(), reason)
 
         if status is MissionStatus.FAILED:
             mission_emit(ev.mission_failed(mission.task_id, mission.id, reason or "", summary))

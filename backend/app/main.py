@@ -20,6 +20,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import ErrorCode, NexusError
 from app.core.logging import configure_logging, get_logger
 from app.mcp.registry import get_mcp_pool
+from app.observations.wiring import build_scheduler
 
 logger = get_logger(__name__)
 
@@ -40,6 +41,7 @@ TAGS_METADATA = [
     {"name": "permissions", "description": "Approve or deny CONFIRM tool calls."},
     {"name": "context", "description": "What NEXUS can currently see. Read-only."},
     {"name": "memory", "description": "What NEXUS remembers. Read-only; forgetting goes through approval."},
+    {"name": "observations", "description": "What NEXUS noticed on its own. Read-only."},
     {"name": "mcp", "description": "MCP server status."},
     {"name": "models", "description": "Configured model providers."},
 ]
@@ -62,9 +64,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # server started by one message survive to the next.
         pool = get_mcp_pool()
         await pool.open()
+
+        # Proactive observation. Deliberately started *after* the pool: the
+        # detector reads through the same SAFE tools everything else uses, and
+        # has nothing to look at until they exist.
+        scheduler = build_scheduler(pool)
+        scheduler.start()
         try:
             yield
         finally:
+            await scheduler.stop()
             await pool.close()
             logger.info("NEXUS backend stopped")
 

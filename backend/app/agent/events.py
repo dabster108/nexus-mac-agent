@@ -49,6 +49,12 @@ class EventType(StrEnum):
     WORKSPACE_DETECTED = "workspace_detected"
     CONTEXT_COLLECTED = "context_collected"
 
+    # --- observations: things NEXUS noticed on its own rather than because it
+    # was asked. Same stream as everything else — an observation is not tied to
+    # a task, so it carries the synthetic task id below.
+    OBSERVATION_CREATED = "observation_created"
+    OBSERVATION_DISMISSED = "observation_dismissed"
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()

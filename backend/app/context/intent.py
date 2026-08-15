@@ -28,6 +28,10 @@ class Intent(StrEnum):
     RECALL = "RECALL"
     """"What do you remember?" Memory only — no filesystem work at all."""
 
+    RECENT = "RECENT"
+    """"What happened recently?" Answered from what NEXUS already noticed —
+    the observations are the evidence, so no fresh inspection is needed."""
+
     GENERAL = "GENERAL"
     """Anything else. Gathers the ordinary, cheap context."""
 
@@ -46,11 +50,15 @@ class ContextPlan:
     git_history: bool = False
     processes: bool = False
     machine: bool = False
+    observations: bool = False
 
     @property
     def gathers_anything(self) -> bool:
         return any(
-            (self.memories, self.workspace, self.git_history, self.processes, self.machine)
+            (
+                self.memories, self.workspace, self.git_history, self.processes,
+                self.machine, self.observations,
+            )
         )
 
 
@@ -84,6 +92,17 @@ _PATTERNS: tuple[tuple[Intent, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        Intent.RECENT,
+        re.compile(
+            r"\bwhat happened\b|"
+            r"\banything (?:happen|change|break|go wrong)\b|"
+            r"\bwhat did i miss\b|"
+            r"\bcatch me up\b|"
+            r"\bwhat have you noticed\b|"
+            r"\bany (?:problems|issues|errors|alerts)\b"
+        ),
+    ),
+    (
         Intent.RECALL,
         re.compile(
             r"\bwhat do you (?:remember|know) about\b|"
@@ -114,6 +133,10 @@ _PLANS: dict[Intent, ContextPlan] = {
         Intent.ORIENT, memories=True, workspace=True, processes=True
     ),
     Intent.RECALL: ContextPlan(Intent.RECALL, memories=True),
+    # Answered from the activity feed. Deliberately no live inspection: the
+    # question is about what already happened, and re-scanning now would
+    # describe the present rather than the recent past.
+    Intent.RECENT: ContextPlan(Intent.RECENT, observations=True),
     Intent.GENERAL: ContextPlan(Intent.GENERAL, memories=True),
 }
 
@@ -128,6 +151,7 @@ MISSION_PLAN = ContextPlan(
     workspace=True,
     processes=True,
     machine=True,
+    observations=True,
 )
 
 

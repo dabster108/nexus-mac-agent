@@ -16,6 +16,7 @@ any tool runs.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from app.agent import events as ev
 from app.agent.events import EventSink
@@ -25,6 +26,7 @@ from app.context.models import (
     ContextBudget,
     MachineContext,
     PlanningContext,
+    ObservationSnapshot,
     ProcessSnapshot,
     RetrievedMemory,
     TaskSnapshot,
@@ -35,6 +37,27 @@ from app.tools.permissions import PermissionLevel
 from app.tools.registry import ToolRegistry
 
 logger = get_logger(__name__)
+
+
+def _observe_contradiction(memory: RetrievedMemory, conflict: str, observed: Any) -> None:
+    """Surface a contradicted memory in the activity feed as well as the run.
+
+    Same fact the ``memory_conflict`` event already carries, in the form the
+    user sees when they were not watching the run that found it. Best-effort
+    and lazily imported: context collection must not depend on it.
+    """
+    try:
+        from app.observations import rules
+        from app.observations.store import get_observation_store
+
+        stored = memory.value.get("port") if isinstance(memory.value, dict) else memory.value
+        get_observation_store().record(
+            rules.memory_contradiction(
+                memory.id, memory.key, stored, observed, "a managed process"
+            )
+        )
+    except Exception:  # noqa: BLE001 - observation must not affect the request
+        logger.warning("Could not record a memory observation", exc_info=True)
 
 #: How many commit subjects to carry for a "what changed?" question. Enough to
 #: see the shape of recent work, far short of dumping the log (§5).
@@ -115,6 +138,7 @@ class ContextCollector:
             else []
         )
         machine = await self._machine_context() if plan.machine else None
+        observations = self._recent_observations() if plan.observations else []
 
         active = next((w for w in workspaces if w.active), None)
         memories = self._rescore(memories, objective, active, plan.intent)
@@ -130,6 +154,7 @@ class ContextCollector:
             truncated=len(memories) > self._max_memories,
             processes=tuple(processes),
             recent_tasks=tuple(recent_tasks[:max_tasks]),
+            observations=tuple(observations),
             intent=str(plan.intent),
         )
         emit(ev.context_collected(task_id, context.summary()))
@@ -397,6 +422,7 @@ class ContextCollector:
 
             if conflict:
                 emit(ev.memory_conflict(task_id, memory.key, conflict))
+                _observe_contradiction(memory, conflict, live_ports.get(path))
                 await self._call_safe(
                     "verify_memory", {"memory_id": memory.id, "outcome": "stale"}
                 )
@@ -418,6 +444,36 @@ class ContextCollector:
                 )
             out.append(memory)
         return out
+
+    # --- observations ------------------------------------------------------
+
+    def _recent_observations(self) -> list[ObservationSnapshot]:
+        """What NEXUS has already noticed, for "what happened recently?".
+
+        Read straight from the store rather than re-inspecting the machine: the
+        question is about the past, and the observations *are* the evidence.
+        Their text was sanitised when they were created, so nothing further is
+        done to it here.
+        """
+        budget = self._budget
+        limit = budget.max_observations if budget else 10
+        try:
+            from app.observations.store import get_observation_store
+
+            found = get_observation_store().list(limit=limit)
+        except Exception:  # noqa: BLE001 - context must not depend on the feed
+            logger.warning("Could not read observations for context", exc_info=True)
+            return []
+        # Oldest first, so the prompt reads as a sequence of events.
+        return [
+            ObservationSnapshot(
+                observation_id=item.observation_id,
+                category=str(item.category),
+                severity=str(item.severity),
+                line=item.to_line(),
+            )
+            for item in reversed(found)
+        ]
 
     # --- machine -----------------------------------------------------------
 

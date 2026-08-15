@@ -191,6 +191,15 @@ class TaskStore:
         return True
 
     # --- streaming ---------------------------------------------------
+    def broadcast(self, payload: dict[str, Any]) -> None:
+        """Push a payload that belongs to no task.
+
+        Observations are the only such payload: they are produced by a timer
+        rather than a request. They ride this socket rather than a second one,
+        so a client subscribes once and sees everything.
+        """
+        self._broadcast(payload)
+
     def _broadcast(self, payload: dict[str, Any]) -> None:
         for queue in list(self._subscribers):
             try:

@@ -141,6 +141,7 @@ def test_summary_is_concise_and_not_sensitive() -> None:
         "truncated": True,
         "processes": 0,
         "recent_tasks": 0,
+        "observations": 0,
         "intent": "GENERAL",
     }
     # The point of the assertion: counts and a label, never a remembered value.

@@ -315,6 +315,9 @@ def test_openapi_documents_every_endpoint(client: TestClient) -> None:
         "/api/context",
         "/api/context/{task_id}",
         "/api/memory",
+        "/api/observations",
+        "/api/observations/{observation_id}",
+        "/api/observations/{observation_id}/dismiss",
     }
     assert {tag["name"] for tag in spec["tags"]} == {
         "health",
@@ -326,6 +329,7 @@ def test_openapi_documents_every_endpoint(client: TestClient) -> None:
         "models",
         "context",
         "memory",
+        "observations",
     }
 
 

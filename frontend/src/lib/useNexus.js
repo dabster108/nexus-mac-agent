@@ -14,9 +14,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   WS_URL,
   cancelTask,
+  dismissObservation,
   fetchContext,
   fetchHealth,
   fetchMemories,
+  fetchObservations,
   fetchPending,
   fetchTask,
   resolvePermission,
@@ -33,6 +35,7 @@ export function useNexus() {
   const [events, setEvents] = useState([]);
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState([]);
+  const [observations, setObservations] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -42,12 +45,14 @@ export function useNexus() {
   // --- panels ------------------------------------------------------------
   const refreshPanels = useCallback(async (signal) => {
     try {
-      const [ctx, mem] = await Promise.all([
+      const [ctx, mem, obs] = await Promise.all([
         fetchContext({ signal }),
         fetchMemories({ signal }),
+        fetchObservations({ signal }),
       ]);
       setContext(ctx);
       setMemories(mem.memories ?? []);
+      setObservations(obs.observations ?? []);
       setOnline(true);
     } catch (err) {
       if (err?.name !== "AbortError") setOnline(false);
@@ -106,6 +111,27 @@ export function useNexus() {
           return;
         }
         if (event.type === "connected") return;
+
+        // Observations arrive on the same socket but are not task events:
+        // they belong to the session, so they update their own panel and stay
+        // out of the per-task timeline.
+        if (event.type === "observation_created" && event.observation) {
+          setObservations((current) => [
+            event.observation,
+            ...current.filter(
+              (item) => item.observation_id !== event.observation.observation_id,
+            ),
+          ]);
+          return;
+        }
+        if (event.type === "observation_dismissed" && event.observation) {
+          setObservations((current) =>
+            current.filter(
+              (item) => item.observation_id !== event.observation.observation_id,
+            ),
+          );
+          return;
+        }
 
         setEvents((current) => [...current, event].slice(-MAX_EVENTS));
 
@@ -195,6 +221,17 @@ export function useNexus() {
     [refreshPending],
   );
 
+  const dismiss = useCallback(async (observationId) => {
+    setObservations((current) =>
+      current.filter((item) => item.observation_id !== observationId),
+    );
+    try {
+      await dismissObservation(observationId);
+    } catch {
+      /* the panel poll restores it if the call really failed */
+    }
+  }, []);
+
   const stop = useCallback(async () => {
     const taskId = activeTask.current;
     if (!taskId) return;
@@ -212,10 +249,12 @@ export function useNexus() {
     events,
     messages,
     pending,
+    observations,
     busy,
     error,
     send,
     decide,
+    dismiss,
     stop,
     refreshPanels,
   };

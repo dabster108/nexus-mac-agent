@@ -1,6 +1,7 @@
 "use client";
 
 import { useNexus } from "@/lib/useNexus";
+import { ActivityPanel } from "./components/ActivityPanel";
 import { ApprovalBar } from "./components/ApprovalBar";
 import { Composer } from "./components/Composer";
 import { Conversation } from "./components/Conversation";
@@ -47,10 +48,12 @@ export default function Home() {
     events,
     messages,
     pending,
+    observations,
     busy,
     error,
     send,
     decide,
+    dismiss,
     stop,
   } = useNexus();
 
@@ -69,6 +72,11 @@ export default function Home() {
       <div className="flex min-h-0 flex-1 gap-3 p-3">
         <aside className="flex w-[290px] flex-none flex-col gap-3">
           <ContextPanel context={context} />
+          <ActivityPanel
+            observations={observations}
+            onSend={send}
+            onDismiss={dismiss}
+          />
           <MemoryPanel memories={memories} onSend={send} />
           <Timeline events={events} />
         </aside>
