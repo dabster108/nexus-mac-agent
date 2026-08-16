@@ -5,16 +5,39 @@ import { useEffect, useRef, useState } from "react";
 /**
  * The input.
  *
- * Enter sends, Shift+Enter breaks a line, and the box grows with the message.
- * While a task is running the send button becomes Stop — cancellation already
- * exists in the backend and is exactly what someone reaches for when a run is
- * taking longer than they expected.
+ * Enter sends, Shift+Enter breaks a line, and the box grows to a ceiling and
+ * then scrolls. While a task runs the send button becomes Stop — cancellation
+ * already exists in the backend and is exactly what someone reaches for when a
+ * run takes longer than they expected.
  */
 
-const MAX_HEIGHT = 160;
+const MAX_HEIGHT = 168;
+
+function SendIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
 
 export function Composer({ busy, onSend, onStop }) {
   const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
   const area = useRef(null);
 
   useEffect(() => {
@@ -31,13 +54,21 @@ export function Composer({ busy, onSend, onStop }) {
   };
 
   return (
-    <div className="border-t border-[var(--line)] px-4 py-3">
-      <div className="flex items-end gap-2 rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--panel)] px-3 py-2 focus-within:border-[var(--ink-3)]">
+    <div className="border-t border-[var(--line)] p-3">
+      <div
+        className="flex items-end gap-2 rounded-[12px] border bg-[var(--surface)] px-3.5 py-2.5 transition-[border-color,box-shadow] duration-200"
+        style={{
+          borderColor: focused ? "var(--ink-3)" : "var(--line-2)",
+          boxShadow: focused ? "var(--shadow-md)" : "var(--shadow-sm)",
+        }}
+      >
         <textarea
           ref={area}
           rows={1}
           value={text}
           onChange={(event) => setText(event.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -46,14 +77,16 @@ export function Composer({ busy, onSend, onStop }) {
           }}
           placeholder="Ask NEXUS…"
           aria-label="Message NEXUS"
-          className="max-h-40 flex-1 resize-none bg-transparent text-[14px] leading-6 outline-none placeholder:text-[var(--ink-3)]"
+          className="scroll max-h-[168px] flex-1 resize-none bg-transparent text-[14px] leading-[1.6] outline-none placeholder:text-[var(--ink-3)]"
         />
+
         {busy ? (
           <button
             type="button"
             onClick={onStop}
-            className="rounded-[7px] border border-[var(--line-strong)] px-3 py-1.5 text-[13px] text-[var(--ink-2)] hover:border-[var(--danger)] hover:text-[var(--danger)]"
+            className="btn btn-ghost btn-danger enter-fade"
           >
+            <StopIcon />
             Stop
           </button>
         ) : (
@@ -61,12 +94,18 @@ export function Composer({ busy, onSend, onStop }) {
             type="button"
             onClick={submit}
             disabled={!text.trim()}
-            className="rounded-[7px] bg-[var(--ink)] px-3 py-1.5 text-[13px] text-[var(--bg)] disabled:opacity-30"
+            aria-label="Send"
+            className="btn btn-primary"
           >
+            <SendIcon />
             Send
           </button>
         )}
       </div>
+
+      <p className="mt-1.5 px-1 text-[10px] text-[var(--ink-3)]">
+        Enter to send · Shift + Enter for a new line
+      </p>
     </div>
   );
 }

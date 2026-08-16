@@ -40,6 +40,7 @@ export function useNexus() {
   const [pending, setPending] = useState([]);
   const [observations, setObservations] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
+  const [verifications, setVerifications] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -160,6 +161,22 @@ export function useNexus() {
         }
 
         setEvents((current) => [...current, event].slice(-MAX_EVENTS));
+
+        // A verification says what an action actually achieved, which the
+        // conversation shows beside the answer rather than only in the trace.
+        if (event.type === "verification_completed") {
+          setVerifications((current) => [
+            ...current.slice(-9),
+            {
+              taskId: event.task_id,
+              tool: event.tool,
+              outcome: event.outcome,
+              summary: event.message,
+              evidence: event.evidence ?? [],
+              unknowns: event.unknowns ?? [],
+            },
+          ]);
+        }
 
         // A permission request blocks the run, so ask immediately rather than
         // waiting for the next poll.
@@ -312,6 +329,7 @@ export function useNexus() {
     pending,
     observations,
     suggestions,
+    verifications,
     busy,
     error,
     send,

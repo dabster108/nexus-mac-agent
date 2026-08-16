@@ -1,57 +1,113 @@
 @import "tailwindcss";
 
-/* NEXUS control centre.
+/* ============================================================================
+   NEXUS — design system
 
-   The palette is deliberately quiet: a near-neutral ground, one restrained
-   accent, and colour reserved for things that carry meaning — a pending
-   approval, a stale memory, a running process. An operating environment is
-   looked at all day, so it should recede until it has something to say. */
+   Dark-first, because this is a tool people leave open all day beside an
+   editor. The base is a warm charcoal rather than pure black: black flattens
+   everything on it and makes borders shout, while a slightly warm, slightly
+   lifted ground lets four levels of surface sit apart from each other using
+   almost no contrast.
+
+   The identity is the accent — a soft indigo that reads as "system" rather
+   than "brand" — plus one aurora gradient used in exactly two places (hero,
+   sidebar wash). Everything else earns its place through spacing, type and a
+   single hairline.
+   ========================================================================= */
 
 :root {
-  --bg: #fbfbfa;
-  --panel: #ffffff;
-  --panel-2: #f6f6f5;
-  --line: #e6e5e3;
-  --line-strong: #d6d5d2;
-  --ink: #1a1a19;
-  --ink-2: #55534f;
-  --ink-3: #8b8781;
-  --accent: #3b5bdb;
-  --accent-soft: #eef1fd;
-  --ok: #2f7a52;
-  --warn: #9a6512;
-  --warn-soft: #fdf4e3;
-  --danger: #a33a32;
-  --radius: 10px;
+  color-scheme: dark;
+
+  /* --- ground: four levels, deliberately close together ------------------ */
+  --bg: #0a0a0c;
+  --bg-1: #0e0e11;
+  --surface: #141418;
+  --surface-2: #1a1a1f;
+  --surface-3: #212127;
+
+  /* --- line: a hairline and a hairline you can see ----------------------- */
+  --line: #232329;
+  --line-2: #2e2e36;
+  --line-3: #3a3a44;
+
+  /* --- ink --------------------------------------------------------------- */
+  --ink: #f2f2f4;
+  --ink-2: #a3a3ad;
+  --ink-3: #6e6e7a;
+  --ink-4: #4a4a55;
+
+  /* --- accent and meaning ------------------------------------------------ */
+  --accent: #7c6bf5;
+  --accent-2: #9b8dff;
+  --accent-ink: #c4bcff;
+  --accent-bg: #191634;
+  --accent-line: #332c66;
+
+  --ok: #3fcf8e;
+  --ok-bg: #0f2a20;
+  --warn: #e0a83c;
+  --warn-bg: #2b2113;
+  --danger: #f0685f;
+  --danger-bg: #2e1918;
+
+  /* --- depth ------------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.5);
+  --shadow-glow: 0 0 0 1px var(--accent-line), 0 8px 32px -8px rgb(124 107 245 / 0.35);
+
+  /* --- motion ------------------------------------------------------------ */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --t-fast: 120ms;
+  --t: 200ms;
+  --t-slow: 340ms;
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
 }
 
-@media (prefers-color-scheme: dark) {
+/* Light mode is supported but secondary: the product is designed dark. */
+@media (prefers-color-scheme: light) {
   :root {
-    --bg: #131313;
-    --panel: #191919;
-    --panel-2: #1f1f1f;
-    --line: #2a2a2a;
-    --line-strong: #3a3a3a;
-    --ink: #ededec;
-    --ink-2: #a8a6a2;
-    --ink-3: #77746f;
-    --accent: #8fa5f6;
-    --accent-soft: #1e2440;
-    --ok: #6fbf8f;
-    --warn: #d6a545;
-    --warn-soft: #2a2317;
-    --danger: #e2857c;
+    color-scheme: light;
+    --bg: #fbfbfc;
+    --bg-1: #f6f6f8;
+    --surface: #ffffff;
+    --surface-2: #fafafb;
+    --surface-3: #f2f2f5;
+    --line: #e8e8ec;
+    --line-2: #dcdce2;
+    --line-3: #c8c8d0;
+    --ink: #16161a;
+    --ink-2: #55555f;
+    --ink-3: #8a8a95;
+    --ink-4: #b0b0ba;
+    --accent: #5b4bd6;
+    --accent-2: #6f5df0;
+    --accent-ink: #4636b8;
+    --accent-bg: #f0eeff;
+    --accent-line: #ddd8fb;
+    --ok: #178055;
+    --ok-bg: #e7f6ef;
+    --warn: #96650f;
+    --warn-bg: #fdf3e2;
+    --danger: #c33d34;
+    --danger-bg: #fdeceb;
+    --shadow-sm: 0 1px 2px rgb(16 16 24 / 0.05);
+    --shadow-md: 0 4px 12px -2px rgb(16 16 24 / 0.08), 0 2px 4px -2px rgb(16 16 24 / 0.04);
+    --shadow-lg: 0 12px 32px -8px rgb(16 16 24 / 0.12), 0 4px 8px -4px rgb(16 16 24 / 0.06);
+    --shadow-glow: 0 0 0 1px var(--accent-line), 0 8px 32px -8px rgb(91 75 214 / 0.2);
   }
 }
 
 @theme inline {
   --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-panel-2: var(--panel-2);
-  --color-line: var(--line);
+  --color-surface: var(--surface);
   --color-ink: var(--ink);
-  --color-ink-2: var(--ink-2);
-  --color-ink-3: var(--ink-3);
   --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -66,107 +122,373 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Panels ---------------------------------------------------------------- */
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--ink);
 }
 
-.panel-head {
-  font-size: 10px;
+/* ============================================================================
+   Typography scale — hierarchy comes from size *and* letter-spacing, so
+   headings tighten as they grow rather than just getting bigger.
+   ========================================================================= */
+
+.t-display {
+  font-size: clamp(2.25rem, 1.2rem + 4.2vw, 4.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  font-weight: 560;
+}
+
+.t-h1 {
+  font-size: clamp(1.6rem, 1.1rem + 1.8vw, 2.25rem);
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  font-weight: 560;
+}
+
+.t-h2 {
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  font-weight: 560;
+}
+
+.t-body {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+.t-sm { font-size: 0.8125rem; line-height: 1.5; }
+.t-xs { font-size: 0.75rem; line-height: 1.45; }
+
+.t-label {
+  font-size: 0.625rem;
   font-weight: 600;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
 
-.hairline {
-  border-color: var(--line);
+.t-metric {
+  font-size: 1.75rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Small semantic pieces -------------------------------------------------- */
+.mono {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  font-variant-ligatures: none;
+  font-feature-settings: "zero";
+}
+
+.t-gradient {
+  background: linear-gradient(180deg, var(--ink) 30%, color-mix(in srgb, var(--ink) 55%, transparent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ============================================================================
+   Surfaces
+   ========================================================================= */
+
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.surface-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* A card whose top edge catches the light, the way a real panel would. */
+.card {
+  position: relative;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease),
+    transform var(--t) var(--ease);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: var(--r) var(--r) 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--ink) 10%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.card-hover:hover {
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-md);
+  transform: translate3d(0, -2px, 0);
+}
+
+.glass {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+/* The one atmospheric gradient, used in the hero and the sidebar wash. */
+.aurora {
+  background:
+    radial-gradient(60rem 30rem at 15% -10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 65%),
+    radial-gradient(50rem 26rem at 85% 8%, color-mix(in srgb, #3fcf8e 10%, transparent), transparent 60%);
+}
+
+/* ============================================================================
+   Controls
+   ========================================================================= */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--r-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 7px 13px;
+  white-space: nowrap;
+  transition: transform var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
+}
+
+.btn:active:not(:disabled) { transform: scale(0.975); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  color: #fff;
+  box-shadow: 0 1px 0 0 color-mix(in srgb, #fff 18%, transparent) inset, var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 1px 0 0 color-mix(in srgb, #fff 22%, transparent) inset, var(--shadow-glow);
+}
+
+.btn-solid {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.btn-solid:hover:not(:disabled) { box-shadow: var(--shadow-md); }
+
+.btn-ghost {
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
+  background: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--line-3);
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.btn-lg { font-size: 0.875rem; padding: 10px 18px; border-radius: 10px; }
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11px;
-  line-height: 1.5;
-  border: 1px solid var(--line-strong);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  border: 1px solid var(--line-2);
   color: var(--ink-2);
   white-space: nowrap;
+  transition: all var(--t-fast) var(--ease);
 }
 
-.chip-accent {
-  background: var(--accent-soft);
-  border-color: transparent;
-  color: var(--accent);
-}
+.chip-accent { background: var(--accent-bg); border-color: var(--accent-line); color: var(--accent-ink); }
+.chip-ok { background: var(--ok-bg); border-color: transparent; color: var(--ok); }
+.chip-warn { background: var(--warn-bg); border-color: transparent; color: var(--warn); }
+.chip-danger { background: var(--danger-bg); border-color: transparent; color: var(--danger); }
 
-.chip-warn {
-  background: var(--warn-soft);
-  border-color: transparent;
-  color: var(--warn);
-}
-
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  flex: none;
-}
-
+.dot { width: 6px; height: 6px; border-radius: 999px; flex: none; }
 .dot-ok { background: var(--ok); }
 .dot-idle { background: var(--ink-3); }
 .dot-warn { background: var(--warn); }
 .dot-danger { background: var(--danger); }
+.dot-accent { background: var(--accent); }
 
-.mono {
-  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
-  font-variant-ligatures: none;
+.dot-live {
+  background: var(--ok);
+  animation: halo 2.4s var(--ease) infinite;
 }
 
-/* Scrollbars: present, but not part of the design ------------------------ */
+@keyframes halo {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); }
+  70% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--ok) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 0%, transparent); }
+}
+
+:where(button, a, textarea, input, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Navigation: the active item is a lit surface, not a bright block. */
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.nav-item:hover { background: var(--surface-2); color: var(--ink); }
+
+.nav-item[data-active="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.nav-item[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  height: 15px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: translateY(-50%);
+  box-shadow: 0 0 8px 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* ============================================================================
+   Scrollbars
+   ========================================================================= */
 
 .scroll {
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
+  scrollbar-color: var(--line-2) transparent;
 }
 
-.scroll::-webkit-scrollbar {
-  width: 8px;
-}
+.scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
 
 .scroll::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
-  border-radius: 999px;
-}
-
-.scroll::-webkit-scrollbar-track {
   background: transparent;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  transition: background-color var(--t) var(--ease);
 }
 
-/* The one piece of motion: a request in flight --------------------------- */
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+.scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  background-clip: content-box;
 }
 
-.pulse {
-  animation: pulse-soft 1.4s ease-in-out infinite;
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ============================================================================
+   Motion
+   ========================================================================= */
+
+@keyframes rise { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes rise-sm { from { opacity: 0; transform: translate3d(0, 5px, 0); } to { opacity: 1; transform: none; } }
+@keyframes slide-x { from { opacity: 0; transform: translate3d(10px, 0, 0); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.96) translate3d(0, 6px, 0); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@keyframes bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes float-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+/* `--i` staggers a list without a library: style={{ "--i": index }}. */
+.enter { animation: rise var(--t-slow) var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.enter-sm { animation: rise-sm var(--t) var(--ease) both; animation-delay: calc(var(--i, 0) * 26ms); }
+.enter-x { animation: slide-x var(--t) var(--ease) both; animation-delay: calc(var(--i, 0) * 30ms); }
+.enter-pop { animation: pop var(--t-slow) var(--spring) both; animation-delay: calc(var(--i, 0) * 55ms); }
+.enter-fade { animation: fade var(--t) var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
+
+.thinking-dot { animation: breathe 1.3s var(--ease-in-out) infinite; }
+.thinking-dot:nth-child(2) { animation-delay: 0.18s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.36s; }
+
+.progress-bar { transform-origin: left; animation: bar 1.6s var(--ease-in-out) infinite alternate; }
+.float { animation: float-y 6s var(--ease-in-out) infinite; }
+
+.shimmer {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: sweep 1.5s linear infinite;
+  border-radius: 6px;
 }
 
+.reveal .reveal-target {
+  opacity: 0;
+  transform: translate3d(-2px, 0, 0);
+  transition: opacity var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.reveal:hover .reveal-target,
+.reveal:focus-within .reveal-target { opacity: 1; transform: none; }
+
+.lift { transition: transform var(--t) var(--ease), box-shadow var(--t) var(--ease); }
+.lift:hover { transform: translate3d(0, -2px, 0); box-shadow: var(--shadow-md); }
+
+/* Scroll-reveal, driven by IntersectionObserver adding [data-seen]. */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+  transition: opacity 700ms var(--ease), transform 700ms var(--ease);
+  transition-delay: calc(var(--i, 0) * 80ms);
+}
+
+.reveal-on-scroll[data-seen="true"] { opacity: 1; transform: none; }
+
+/* Motion is a nicety; legibility is not. */
 @media (prefers-reduced-motion: reduce) {
-  .pulse {
-    animation: none;
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
+
+  .enter, .enter-sm, .enter-x, .enter-pop, .enter-fade { animation: fade 0.01ms both; }
+  .reveal-on-scroll { opacity: 1; transform: none; }
+  .float, .dot-live, .thinking-dot, .progress-bar, .shimmer { animation: none; }
 }
