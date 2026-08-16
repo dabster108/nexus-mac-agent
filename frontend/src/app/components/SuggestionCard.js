@@ -3,19 +3,23 @@
 /**
  * A suggestion, and the two things a person can do with it.
  *
- * The accept button sends the suggestion's own `prompt` to /api/chat — the
- * same path as typing it. There is no execute endpoint behind it, and the
- * label is never a vague "Fix": a button that hides what it will do is how a
+ * Accepting sends the suggestion's own `prompt` to /api/chat — the same path
+ * as typing it. There is no execute endpoint behind the button, and the label
+ * is never a vague "Fix": a button that hides what it will do is how a
  * proactive assistant becomes an autonomous one by accident. The verb comes
  * from the intent, so "Restart backend" reads as a change and "Investigate"
  * reads as a look.
+ *
+ * These arrive unprompted, so they are the one surface that gets a spring on
+ * entry — a small overshoot is how a panel says "this is new" without
+ * resorting to colour.
  */
 
 const SEVERITY = {
-  ERROR: { dot: "dot-danger", ring: "border-[var(--danger)]" },
-  WARNING: { dot: "dot-warn", ring: "border-[var(--line-strong)]" },
-  NOTICE: { dot: "dot-idle", ring: "border-[var(--line-strong)]" },
-  INFO: { dot: "dot-ok", ring: "border-[var(--line-strong)]" },
+  ERROR: { dot: "dot-danger", edge: "var(--danger)" },
+  WARNING: { dot: "dot-warn", edge: "var(--warn)" },
+  NOTICE: { dot: "dot-idle", edge: "var(--line-2)" },
+  INFO: { dot: "dot-ok", edge: "var(--ok)" },
 };
 
 /** Explicit verbs only — never "Fix". */
@@ -29,38 +33,50 @@ const ACTION_LABEL = {
   save_memory: "Remember it",
 };
 
-export function SuggestionCard({ suggestion, onAccept, onDismiss }) {
+export function SuggestionCard({ suggestion, onAccept, onDismiss, index = 0 }) {
   const style = SEVERITY[suggestion.severity] ?? SEVERITY.INFO;
   const action = suggestion.suggested_action ?? {};
   const label = ACTION_LABEL[action.intent] ?? "Look into it";
 
   return (
-    <li className={`rounded-[8px] border ${style.ring} bg-[var(--panel-2)] p-2.5`}>
-      <div className="flex items-start gap-2">
-        <span className={`dot ${style.dot} mt-[6px]`} />
+    <li
+      className="enter-pop relative overflow-hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
+      {/* A coloured edge carries the severity without tinting the whole card. */}
+      <span
+        aria-hidden
+        className="absolute left-0 top-0 h-full w-[2px]"
+        style={{ background: style.edge }}
+      />
+
+      <div className="flex items-start gap-2 pl-1">
+        <span className={`dot ${style.dot} mt-[7px]`} />
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium leading-5">{suggestion.title}</p>
-          <p className="mt-0.5 text-[11px] leading-4 text-[var(--ink-2)]">
+          <p className="text-[12.5px] font-medium leading-5">
+            {suggestion.title}
+          </p>
+          <p className="mt-1 text-[11.5px] leading-[1.5] text-[var(--ink-2)]">
             {suggestion.description}
           </p>
           {suggestion.reason ? (
-            <p className="mt-1 text-[11px] leading-4 text-[var(--ink-3)]">
+            <p className="mt-1 text-[11px] leading-[1.5] text-[var(--ink-3)]">
               {suggestion.reason}
             </p>
           ) : null}
 
-          <div className="mt-2 flex items-center gap-1.5">
+          <div className="mt-2.5 flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => onAccept(suggestion)}
-              className="rounded-[6px] bg-[var(--ink)] px-2.5 py-1 text-[11px] text-[var(--bg)] hover:opacity-90"
+              className="btn btn-primary !px-2.5 !py-1 !text-[11px]"
             >
               {label}
             </button>
             <button
               type="button"
               onClick={() => onDismiss(suggestion.suggestion_id)}
-              className="rounded-[6px] border border-[var(--line-strong)] px-2.5 py-1 text-[11px] text-[var(--ink-2)] hover:border-[var(--ink-3)]"
+              className="btn btn-ghost !px-2.5 !py-1 !text-[11px]"
             >
               Dismiss
             </button>
