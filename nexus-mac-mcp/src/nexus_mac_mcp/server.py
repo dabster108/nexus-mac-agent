@@ -108,7 +108,13 @@ def create_server() -> MCPServer:
             "Open an installed macOS application by name. "
             "Examples: 'Visual Studio Code', 'Safari', 'Finder'."
         ),
-        meta=CONFIRM,
+        # Only the application's *presence* can be checked from here. Whether a
+        # window actually appeared would need the GUI automation this project
+        # deliberately does not have, so the backend reports that as UNKNOWN.
+        meta=permissions.meta(
+            permissions.Permission.CONFIRM,
+            verification={"type": "application", "name_from": "arguments"},
+        ),
     )
     def open_application(
         application: Annotated[
@@ -246,6 +252,10 @@ def create_server() -> MCPServer:
         meta=permissions.meta(
             permissions.Permission.CONFIRM,
             prompt="Run {command} in {working_directory}",
+            # The result already proves the outcome. Re-running a test suite to
+            # confirm a test suite would be both wasteful and, for anything
+            # with side effects, wrong.
+            verification={"type": "exit_code"},
         ),
     )
     def run_command(
@@ -270,6 +280,14 @@ def create_server() -> MCPServer:
         meta=permissions.meta(
             permissions.Permission.CONFIRM,
             prompt="Start {command} in {working_directory}",
+            # Launching is not the goal — staying up is. The backend re-reads
+            # the process and, when the result carries a URL, asks whether
+            # anything is answering on it.
+            verification={
+                "type": "process",
+                "process_id_from": "result",
+                "url_from": "result",
+            },
         ),
     )
     def start_process(
@@ -338,6 +356,7 @@ def create_server() -> MCPServer:
         meta=permissions.meta(
             permissions.Permission.CONFIRM,
             prompt="Stop the managed process {process_id}",
+            verification={"type": "process_stopped", "process_id_from": "arguments"},
         ),
     )
     def stop_process(

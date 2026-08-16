@@ -283,6 +283,7 @@ class AgentRunner:
             ):
                 final_state = chunk
             emit_memory_outcome_events(final_state.get("tool_results") or [], task_id, emit)
+            self._record_outcomes(final_state, record)
             return final_state
 
         return {}  # pragma: no cover - unreachable, satisfies type checkers
@@ -503,6 +504,37 @@ class AgentRunner:
                 self._tasks.note_status(record, TaskStatus.RUNNING)
 
         return emit
+
+    @staticmethod
+    def _record_outcomes(state: dict[str, Any], record: TaskRecord) -> None:
+        """Turn each verified outcome into an observation and, on failure, a
+        suggestion — through the existing stores, so their dedupe, cooldown
+        and rate limits apply unchanged."""
+        entries = state.get("verifications") or []
+        if not entries:
+            return
+        try:
+            from app.verification.models import Evidence, Outcome, Verification
+            from app.verification.outcomes import record as record_outcome
+
+            for entry in entries:
+                verification = Verification(
+                    tool=entry.get("tool", ""),
+                    outcome=Outcome(entry.get("outcome", "UNKNOWN")),
+                    summary=entry.get("summary", ""),
+                    evidence=tuple(
+                        Evidence.observed(e.get("source", ""), e.get("statement", ""))
+                        for e in entry.get("evidence", [])
+                    ),
+                )
+                record_outcome(
+                    verification,
+                    request=record.request,
+                    task_id=record.task_id,
+                    process_id=entry.get("process_id"),
+                )
+        except Exception:  # noqa: BLE001 - reporting must not affect the run
+            logger.warning("Could not record verification outcomes", exc_info=True)
 
     @staticmethod
     def _observe(observation: Any) -> None:

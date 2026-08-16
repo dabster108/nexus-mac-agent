@@ -131,6 +131,30 @@ def _extract_context(value: Any, into: dict[str, Any]) -> None:
                 into[key] = value[key]
 
 
+def _apply_verification(step: MissionStep, final_state: dict[str, Any]) -> None:
+    """Copy this step's verified outcome onto the step.
+
+    The mission's branching already keys off StepStatus, so recording a FAILED
+    *outcome* as a failed step is all that "verification drives run_if" needs —
+    no second condition system, and `on_failure` recovery steps fire for an
+    action that ran fine but did not achieve anything.
+    """
+    entries = [
+        entry
+        for entry in (final_state.get("verifications") or [])
+        if entry.get("tool") == step.tool
+    ]
+    if not entries:
+        return
+    entry = entries[-1]
+    step.action_status = "SUCCESS"
+    step.verification_status = entry.get("summary") or ""
+    step.outcome = entry.get("outcome")
+    step.evidence = tuple(
+        e.get("statement", "") for e in entry.get("evidence", [])
+    )[:4]
+
+
 def _step_outcome(step: MissionStep, final_state: dict[str, Any]) -> tuple[StepStatus, str]:
     """What a step's underlying task run means for the mission.
 
@@ -152,6 +176,12 @@ def _step_outcome(step: MissionStep, final_state: dict[str, Any]) -> tuple[StepS
     target_results = [r for r in tool_results if r.get("name") == step.tool]
     if target_results and not target_results[-1].get("success", False):
         return StepStatus.FAILED, str(target_results[-1].get("content") or "The tool did not run.")
+
+    # A tool that ran but did not achieve the step's goal is a failed step.
+    # This is the whole point of the phase inside a mission: "it executed" is
+    # not "it worked", and a recovery step should fire for the second.
+    if step.outcome == "FAILED":
+        return StepStatus.FAILED, step.verification_status or "The action did not achieve its goal."
 
     message = _final_answer(final_state.get("messages") or []) or "Step finished."
     return StepStatus.COMPLETED, message
@@ -412,6 +442,9 @@ class MissionEngine:
         emit_memory_outcome_events(
             final_state.get("tool_results") or [], step_record.task_id, step_sink
         )
+        # Record what the action actually achieved before deciding the step's
+        # status, so a FAILED outcome can fail the step and trigger recovery.
+        _apply_verification(step, final_state)
 
         status, message = _step_outcome(step, final_state)
         self._finalise(step_record, final_state)

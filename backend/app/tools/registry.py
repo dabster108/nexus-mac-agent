@@ -10,7 +10,7 @@ added later — a source only has to satisfy :class:`ToolSource`.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, field
 from typing import Any, Protocol, runtime_checkable
 
 from app.core.errors import ToolError
@@ -34,6 +34,12 @@ class ToolDefinition:
     model; the person deciding whether to allow an action deserves a sentence
     written for them.
     """
+
+    meta: dict[str, Any] = field(default_factory=dict)
+    """The tool's own namespaced declarations, currently its verification
+    contract. Kept as data the backend *reads* rather than as behaviour it
+    inherits: declaring a contract grants no capability, and the verifier only
+    ever calls SAFE tools whatever a contract says."""
 
     def to_model_spec(self) -> ToolSpec:
         return ToolSpec(

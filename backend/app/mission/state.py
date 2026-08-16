@@ -84,6 +84,14 @@ class MissionStep:
     result_message: str | None = None
     retries: int = 0
 
+    #: Whether the *tool* ran. Distinct from `outcome`, which is whether the
+    #: step's goal was met: a start_process that launches a process which then
+    #: dies has action SUCCESS and outcome FAILED.
+    action_status: str | None = None
+    verification_status: str | None = None
+    outcome: str | None = None
+    evidence: tuple[str, ...] = ()
+
     def to_public_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "id": self.id,
@@ -91,6 +99,12 @@ class MissionStep:
             "tool": self.tool,
             "status": str(self.status),
         }
+        for name in ("action_status", "verification_status", "outcome"):
+            value = getattr(self, name)
+            if value:
+                payload[name] = value
+        if self.evidence:
+            payload["evidence"] = list(self.evidence[:4])
         if self.depends_on:
             payload["depends_on"] = list(self.depends_on)
         if self.run_if != "always":

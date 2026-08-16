@@ -57,6 +57,10 @@ class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     tool_calls: Annotated[list[ToolCallRecord], operator.add]
     tool_results: Annotated[list[ToolResultRecord], operator.add]
+    verifications: Annotated[list[dict[str, Any]], operator.add]
+    """What each machine-changing action was found to have actually achieved.
+    Separate from ``tool_results`` because "the tool returned" and "the goal was
+    met" are different claims, and the runner reports on the second."""
     execution_events: Annotated[list[ExecutionEvent], operator.add]
     requires_permission: bool
     permission_request: PermissionRequest | None
@@ -74,6 +78,7 @@ def initial_state(task_id: str, user_request: str) -> AgentState:
         messages=[HumanMessage(content=user_request)],
         tool_calls=[],
         tool_results=[],
+        verifications=[],
         execution_events=[],
         requires_permission=False,
         permission_request=None,

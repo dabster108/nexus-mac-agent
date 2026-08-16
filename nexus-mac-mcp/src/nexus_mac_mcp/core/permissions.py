@@ -30,7 +30,11 @@ class Permission(StrEnum):
     """Destructive or security-sensitive. Nothing here declares this yet."""
 
 
-def meta(permission: Permission, prompt: str | None = None) -> dict[str, Any]:
+def meta(
+    permission: Permission,
+    prompt: str | None = None,
+    verification: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build the ``_meta`` payload announcing a tool's classification.
 
     ``prompt`` is an optional template the backend renders with the call's
@@ -38,10 +42,18 @@ def meta(permission: Permission, prompt: str | None = None) -> dict[str, Any]:
     {working_directory}"``. Without one the backend falls back to the tool's
     description, which is written for the model rather than for someone
     deciding whether to allow something.
+
+    ``verification`` is how a tool declares what checking it looks like — e.g.
+    ``{"type": "process", "url_from": "result"}``. The backend reads this from
+    the live registry rather than keeping a table of tool names, so a tool that
+    declares nothing is reported UNKNOWN rather than guessed at. Declaring it
+    grants no capability: the backend only ever verifies with SAFE tools.
     """
     payload: dict[str, Any] = {"permission": str(permission)}
     if prompt:
         payload["prompt"] = prompt
+    if verification:
+        payload["verification"] = dict(verification)
     return {META_NAMESPACE: payload}
 
 

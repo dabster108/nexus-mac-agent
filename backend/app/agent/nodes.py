@@ -340,6 +340,7 @@ async def tool_node(
     messages: list[ToolMessage] = []
     execution_events: list[ev.ExecutionEvent] = []
     results: list[ToolResultRecord] = []
+    verifications: list[tuple[str, Any, dict, Any]] = []
     permission_request = None
 
     for call in calls:
@@ -506,6 +507,18 @@ async def tool_node(
             "Tool '%s' completed (success=%s)", name, success, extra={"task_id": task_id}
         )
         _record(execution_events, emit, ev.tool_completed(task_id, name, success))
+
+        # The tool returning is not the same as the goal being met. Check, and
+        # tell the model what was actually established — otherwise it answers
+        # from "the call succeeded", which is how "started successfully" gets
+        # said about a process that died two seconds later.
+        verification = await _verify(
+            registry, name, result, arguments, task_id, emit, execution_events
+        )
+        if verification is not None:
+            text = f"{text}\n\n{verification.to_prompt_block()}"
+            verifications.append((name, verification, arguments, result))
+
         messages.append(ToolMessage(content=text, tool_call_id=call_id, name=name))
         results.append(
             ToolResultRecord(
@@ -522,6 +535,20 @@ async def tool_node(
         "execution_events": execution_events,
         "tool_results": results,
     }
+    if verifications:
+        update["verifications"] = [
+            {
+                "tool": tool,
+                **verification.to_public_dict(),
+                "process_id": (
+                    (raw.structured or {}).get("process_id")
+                    if hasattr(raw, "structured")
+                    else None
+                )
+                or arguments.get("process_id"),
+            }
+            for tool, verification, arguments, raw in verifications
+        ]
     if permission_request is not None:
         # Stop here and hand the decision back to the user; the runner emits
         # the terminal event.
@@ -529,6 +556,54 @@ async def tool_node(
         update["permission_request"] = permission_request
         update["completed"] = True
     return update
+
+
+async def _verify(
+    registry: ToolRegistry,
+    tool: str,
+    result: Any,
+    arguments: dict[str, Any],
+    task_id: str,
+    emit: ev.EventSink,
+    events: list[ev.ExecutionEvent],
+) -> Any:
+    """Check whether a completed action achieved what was asked.
+
+    Only for tools that change something: verifying a read is meaningless, and
+    it would double the cost of every ordinary question. Imported lazily to
+    keep `app.verification` off this module's import path.
+    """
+    definition = registry.get(tool)
+    if definition is None or definition.permission is PermissionLevel.SAFE:
+        return None
+
+    from app.verification.planner import contract_for
+    from app.verification.verifier import Verifier
+
+    if not contract_for(definition):
+        # Undeclared is not guessed at. The absence of a contract is reported
+        # as "not verified" rather than papered over with an assumption.
+        return None
+
+    structured = result.structured if isinstance(result.structured, dict) else {}
+    _record(events, emit, ev.verification_started(task_id, tool))
+    try:
+        verification = await Verifier(registry).verify(
+            tool=tool, result=structured, arguments=arguments
+        )
+    except Exception:  # noqa: BLE001 - a failed check must not fail the action
+        logger.warning("Verification of '%s' failed", tool, exc_info=True)
+        return None
+
+    _record(
+        events, emit, ev.verification_completed(task_id, tool, verification.to_public_dict())
+    )
+    logger.info(
+        "Verification of '%s': %s (%d call(s), %.0fms)",
+        tool, verification.outcome, verification.tool_calls, verification.duration_ms,
+        extra={"task_id": task_id},
+    )
+    return verification
 
 
 def should_continue(state: AgentState, *, max_iterations: int) -> Literal["tools", "end"]:
