@@ -40,6 +40,35 @@ def _declared_permission(meta: dict[str, Any]) -> str | None:
     return value if isinstance(value, str) else None
 
 
+#: Verification strategies this backend understands. A contract naming
+#: anything else is dropped rather than trusted — a server cannot introduce a
+#: new kind of verification by asserting one.
+KNOWN_VERIFICATION_TYPES = frozenset(
+    {"process", "process_stopped", "local_service", "exit_code", "application"}
+)
+
+#: Fields a contract may set. Anything else is discarded, so a server cannot
+#: smuggle extra instructions through metadata.
+_VERIFICATION_FIELDS = frozenset(
+    {"type", "process_id_from", "url_from", "name_from"}
+)
+
+
+def _declared_verification(meta: dict[str, Any]) -> dict[str, Any]:
+    """The tool's verification contract, filtered to what is understood."""
+    declared = _namespaced(meta).get("verification")
+    if not isinstance(declared, dict):
+        return {}
+    kind = declared.get("type")
+    if not isinstance(kind, str) or kind not in KNOWN_VERIFICATION_TYPES:
+        return {}
+    return {
+        key: str(value)[:40]
+        for key, value in declared.items()
+        if key in _VERIFICATION_FIELDS and isinstance(value, str)
+    }
+
+
 def _declared_prompt(meta: dict[str, Any]) -> str | None:
     value = _namespaced(meta).get("prompt")
     if isinstance(value, str) and 0 < len(value) <= MAX_PROMPT_TEMPLATE:
@@ -89,6 +118,9 @@ class MCPToolSource:
                     source=self.name,
                     permission=permission,
                     prompt_template=_declared_prompt(tool.meta),
+                    meta={"verification": _declared_verification(tool.meta)}
+                    if _declared_verification(tool.meta)
+                    else {},
                 )
             )
         logger.info(

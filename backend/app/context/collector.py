@@ -139,6 +139,7 @@ class ContextCollector:
         )
         machine = await self._machine_context() if plan.machine else None
         observations = self._recent_observations() if plan.observations else []
+        last_outcome = self._last_outcome() if plan.observations else None
 
         active = next((w for w in workspaces if w.active), None)
         memories = self._rescore(memories, objective, active, plan.intent)
@@ -155,6 +156,7 @@ class ContextCollector:
             processes=tuple(processes),
             recent_tasks=tuple(recent_tasks[:max_tasks]),
             observations=tuple(observations),
+            last_outcome=last_outcome,
             intent=str(plan.intent),
         )
         emit(ev.context_collected(task_id, context.summary()))
@@ -474,6 +476,24 @@ class ContextCollector:
             )
             for item in reversed(found)
         ]
+
+    @staticmethod
+    def _last_outcome() -> str | None:
+        """What the last action was verified to have achieved.
+
+        Bounded to its own prompt block, which is already the sanitised,
+        evidence-only rendering — no new text is composed here.
+        """
+        try:
+            from app.verification.outcomes import last_outcome
+
+            found = last_outcome()
+        except Exception:  # noqa: BLE001 - context must not depend on it
+            return None
+        if found is None:
+            return None
+        verification, request = found
+        return f"Request: {request}\n{verification.to_prompt_block()}"
 
     # --- machine -----------------------------------------------------------
 

@@ -220,6 +220,9 @@ class PlanningContext:
     processes: tuple[ProcessSnapshot, ...] = ()
     recent_tasks: tuple[TaskSnapshot, ...] = ()
     observations: tuple[ObservationSnapshot, ...] = ()
+    #: What the last machine-changing action was found to have achieved, so a
+    #: follow-up can be answered from evidence rather than from recollection.
+    last_outcome: str | None = None
     intent: str = "GENERAL"
 
     @property
@@ -237,7 +240,7 @@ class PlanningContext:
         tool's current result always outranks anything remembered here.
         """
         if not (self.memories or self.workspaces or self.machine or self.processes
-                or self.recent_tasks or self.observations):
+                or self.recent_tasks or self.observations or self.last_outcome):
             return ""
 
         lines: list[str] = ["Context gathered before answering:"]
@@ -263,6 +266,9 @@ class PlanningContext:
         if self.recent_tasks:
             lines.append("Recent requests in this session:")
             lines.extend(task.to_line() for task in self.recent_tasks)
+        if self.last_outcome:
+            lines.append("The last action NEXUS took, and what was verified:")
+            lines.append(self.last_outcome)
         if self.machine:
             lines.append("This machine:")
             lines.append(self.machine.to_line())

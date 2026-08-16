@@ -57,6 +57,11 @@ class EventType(StrEnum):
 
     # --- suggestions: a next step offered to the user. Never an action — the
     # user accepting one produces an ordinary chat message.
+    # --- verification: did the action achieve what was asked? Distinct from
+    # tool_completed, which only ever meant "the tool returned".
+    VERIFICATION_STARTED = "verification_started"
+    VERIFICATION_COMPLETED = "verification_completed"
+
     SUGGESTION_CREATED = "suggestion_created"
     SUGGESTION_DISMISSED = "suggestion_dismissed"
     SUGGESTION_EXPIRED = "suggestion_expired"
@@ -366,4 +371,36 @@ def context_collected(task_id: str, summary: dict[str, Any]) -> ExecutionEvent:
         task_id=task_id,
         message="Context gathered for planning.",
         data={"summary": summary},
+    )
+
+
+def verification_started(task_id: str, tool: str) -> ExecutionEvent:
+    return ExecutionEvent(
+        type=EventType.VERIFICATION_STARTED,
+        task_id=task_id,
+        tool=tool,
+        message=f"Checking whether '{tool}' achieved what was asked.",
+    )
+
+
+def verification_completed(
+    task_id: str, tool: str, payload: dict[str, Any]
+) -> ExecutionEvent:
+    """The outcome plus its evidence.
+
+    The payload is the verification's own public dict, which is already
+    sanitised and bounded — evidence quotes tool output, and this event goes
+    straight to the frontend.
+    """
+    return ExecutionEvent(
+        type=EventType.VERIFICATION_COMPLETED,
+        task_id=task_id,
+        tool=tool,
+        message=payload.get("summary") or "",
+        data={
+            "outcome": payload.get("outcome"),
+            "evidence": [e["statement"] for e in payload.get("evidence", [])],
+            "unknowns": payload.get("unknowns", []),
+            "duration_ms": payload.get("duration_ms"),
+        },
     )
