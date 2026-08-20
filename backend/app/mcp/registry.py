@@ -35,6 +35,18 @@ def _namespaced(meta: dict[str, Any]) -> dict[str, Any]:
     return namespaced if isinstance(namespaced, dict) else {}
 
 
+def _tool_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    """The declarations the backend understands, filtered and bounded."""
+    payload: dict[str, Any] = {}
+    verification = _declared_verification(meta)
+    if verification:
+        payload["verification"] = verification
+    purpose = _declared_purpose(meta)
+    if purpose:
+        payload["purpose"] = purpose
+    return payload
+
+
 def _declared_permission(meta: dict[str, Any]) -> str | None:
     value = _namespaced(meta).get("permission")
     return value if isinstance(value, str) else None
@@ -67,6 +79,14 @@ def _declared_verification(meta: dict[str, Any]) -> dict[str, Any]:
         for key, value in declared.items()
         if key in _VERIFICATION_FIELDS and isinstance(value, str)
     }
+
+
+def _declared_purpose(meta: dict[str, Any]) -> str | None:
+    """A tool's own one-sentence explanation, for the execution trace."""
+    value = _namespaced(meta).get("purpose")
+    if isinstance(value, str) and 0 < len(value) <= 200:
+        return value
+    return None
 
 
 def _declared_prompt(meta: dict[str, Any]) -> str | None:
@@ -118,9 +138,7 @@ class MCPToolSource:
                     source=self.name,
                     permission=permission,
                     prompt_template=_declared_prompt(tool.meta),
-                    meta={"verification": _declared_verification(tool.meta)}
-                    if _declared_verification(tool.meta)
-                    else {},
+                    meta=_tool_meta(tool.meta),
                 )
             )
         logger.info(

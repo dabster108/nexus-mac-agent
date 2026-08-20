@@ -12,6 +12,7 @@ from app.api.routers import (
     permissions,
     tasks,
     tools,
+    trace,
 )
 
 #: Mount order determines the order of the groups in /docs.
@@ -20,6 +21,7 @@ ALL_ROUTERS = (
     chat.router,
     tasks.router,
     tools.router,
+    trace.router,
     permissions.router,
     context.router,
     memory.router,
@@ -42,4 +44,5 @@ __all__ = [
     "permissions",
     "tasks",
     "tools",
+    "trace",
 ]

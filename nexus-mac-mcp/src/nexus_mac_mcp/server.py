@@ -114,6 +114,7 @@ def create_server() -> MCPServer:
         meta=permissions.meta(
             permissions.Permission.CONFIRM,
             verification={"type": "application", "name_from": "arguments"},
+            purpose="Open an installed macOS application.",
         ),
     )
     def open_application(
@@ -256,6 +257,7 @@ def create_server() -> MCPServer:
             # confirm a test suite would be both wasteful and, for anything
             # with side effects, wrong.
             verification={"type": "exit_code"},
+            purpose="Run one approved developer command in a project directory.",
         ),
     )
     def run_command(
@@ -288,6 +290,7 @@ def create_server() -> MCPServer:
                 "process_id_from": "result",
                 "url_from": "result",
             },
+            purpose="Start an approved local development process.",
         ),
     )
     def start_process(
@@ -357,6 +360,7 @@ def create_server() -> MCPServer:
             permissions.Permission.CONFIRM,
             prompt="Stop the managed process {process_id}",
             verification={"type": "process_stopped", "process_id_from": "arguments"},
+            purpose="Stop a development process NEXUS started.",
         ),
     )
     def stop_process(

@@ -40,7 +40,7 @@ export function SuggestionCard({ suggestion, onAccept, onDismiss, index = 0 }) {
 
   return (
     <li
-      className="enter-pop relative overflow-hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+      className="enter-pop relative overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] p-3"
       style={{ animationDelay: `${index * 60}ms` }}
     >
       {/* A coloured edge carries the severity without tinting the whole card. */}
@@ -53,14 +53,14 @@ export function SuggestionCard({ suggestion, onAccept, onDismiss, index = 0 }) {
       <div className="flex items-start gap-2 pl-1">
         <span className={`dot ${style.dot} mt-[7px]`} />
         <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] font-medium leading-5">
+          <p className="text-[13px] font-semibold leading-5">
             {suggestion.title}
           </p>
-          <p className="mt-1 text-[11.5px] leading-[1.5] text-[var(--ink-2)]">
+          <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-2)]">
             {suggestion.description}
           </p>
           {suggestion.reason ? (
-            <p className="mt-1 text-[11px] leading-[1.5] text-[var(--ink-3)]">
+            <p className="mt-1 text-[12px] leading-[1.5] text-[var(--ink-3)]">
               {suggestion.reason}
             </p>
           ) : null}
@@ -69,14 +69,14 @@ export function SuggestionCard({ suggestion, onAccept, onDismiss, index = 0 }) {
             <button
               type="button"
               onClick={() => onAccept(suggestion)}
-              className="btn btn-primary !px-2.5 !py-1 !text-[11px]"
+              className="btn btn-primary btn-sm"
             >
               {label}
             </button>
             <button
               type="button"
               onClick={() => onDismiss(suggestion.suggestion_id)}
-              className="btn btn-ghost !px-2.5 !py-1 !text-[11px]"
+              className="btn btn-ghost btn-sm"
             >
               Dismiss
             </button>

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { AuroraCanvas } from "./components/landing/AuroraCanvas";
 import { ProductPreview } from "./components/landing/ProductPreview";
 import { Reveal } from "./components/landing/Reveal";
 
@@ -11,8 +10,9 @@ import { Reveal } from "./components/landing/Reveal";
  * never acts without asking — rather than borrowing the seats-and-billing
  * shape of a hosted product it isn't.
  *
- * A server component: the only client code on the page is the shader, the
- * preview's tilt and the scroll reveals.
+ * A server component: the only client code on the page is the preview's tilt
+ * and the scroll reveals. The hero's backdrop is a static wash — an animated
+ * shader was the most expensive thing on the page and told the reader nothing.
  */
 
 export const metadata = {
@@ -50,10 +50,10 @@ const GUARANTEES = [
 function Logo() {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="grid h-7 w-7 place-items-center rounded-[8px] bg-gradient-to-b from-[var(--accent-2)] to-[var(--accent)] text-[12px] font-bold text-white shadow-[var(--shadow-sm)]">
+      <span className="grid h-7 w-7 place-items-center rounded-[9px] bg-[var(--accent)] text-[12px] font-bold text-white">
         N
       </span>
-      <span className="text-[14px] font-semibold tracking-[0.16em]">NEXUS</span>
+      <span className="text-[14px] font-bold tracking-[0.14em]">NEXUS</span>
     </span>
   );
 }
@@ -76,7 +76,7 @@ export default function Landing() {
   return (
     <div className="relative min-h-full overflow-x-hidden">
       {/* --- header --------------------------------------------------------- */}
-      <header className="glass sticky top-0 z-50 border-b border-[var(--line)]">
+      <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] backdrop-blur-[6px]">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5 sm:px-8">
           <Logo />
           <nav className="flex items-center gap-1.5">
@@ -102,11 +102,9 @@ export default function Landing() {
 
       {/* --- hero ----------------------------------------------------------- */}
       <section className="relative">
-        <div className="absolute inset-0 -z-10 h-[130%] max-h-[1100px]">
-          {/* the static gradient is the fallback the shader fades over */}
-          <div className="aurora absolute inset-0" />
-          <AuroraCanvas className="absolute inset-0 opacity-70 mix-blend-screen" />
-          <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-[var(--bg)]" />
+        <div aria-hidden className="absolute inset-0 -z-10 h-[120%] max-h-[900px]">
+          <div className="wash absolute inset-0" />
+          <div className="absolute inset-x-0 bottom-0 h-52 bg-gradient-to-b from-transparent to-[var(--bg)]" />
         </div>
 
         <div className="mx-auto max-w-6xl px-5 pb-16 pt-20 sm:px-8 sm:pb-24 sm:pt-28">
@@ -120,7 +118,7 @@ export default function Landing() {
             </span>
 
             <h1
-              className="enter t-display t-gradient mt-6 text-balance"
+              className="enter t-display mt-6 text-balance"
               style={{ "--i": 1 }}
             >
               An AI layer that understands
@@ -156,7 +154,7 @@ export default function Landing() {
             </div>
 
             <p
-              className="enter mono mt-5 text-[11px] text-[var(--ink-3)]"
+              className="enter mono mt-5 text-[12px] text-[var(--ink-3)]"
               style={{ "--i": 4 }}
             >
               localhost · no account · no telemetry
@@ -165,7 +163,7 @@ export default function Landing() {
 
           <div className="enter mt-16 sm:mt-20" style={{ "--i": 5 }}>
             <ProductPreview />
-            <p className="mt-3 text-center text-[11px] text-[var(--ink-4)]">
+            <p className="mt-3 text-center text-[12px] text-[var(--ink-3)]">
               Illustrative view of the NEXUS dashboard.
             </p>
           </div>
@@ -192,7 +190,7 @@ export default function Landing() {
           {CAPABILITIES.map((item, index) => (
             <Reveal key={item.title} delay={index % 2}>
               <article className="card card-hover h-full p-6">
-                <span className="mono text-[11px] text-[var(--accent)]">
+                <span className="mono text-[12px] font-semibold text-[var(--accent-ink)]">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <h3 className="t-h2 mt-3">{item.title}</h3>
@@ -237,8 +235,7 @@ export default function Landing() {
       {/* --- close ---------------------------------------------------------- */}
       <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
         <Reveal>
-          <div className="card relative overflow-hidden px-6 py-14 text-center sm:px-16 sm:py-20">
-            <div className="aurora absolute inset-0 opacity-50" />
+          <div className="card wash relative overflow-hidden px-6 py-14 text-center sm:px-16 sm:py-20">
             <div className="relative">
               <h2 className="t-h1 text-balance">Open it and ask where you left off.</h2>
               <p className="t-body mx-auto mt-4 max-w-md">
@@ -259,7 +256,7 @@ export default function Landing() {
       <footer className="border-t border-[var(--line)]">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-5 py-7 sm:flex-row sm:px-8">
           <Logo />
-          <p className="text-[11px] text-[var(--ink-4)]">
+          <p className="text-[12px] text-[var(--ink-3)]">
             A local AI operating layer for macOS.
           </p>
         </div>

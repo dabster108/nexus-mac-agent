@@ -376,6 +376,29 @@ class AgentRunner:
         """The context gathered for a task, for the /api/context endpoint."""
         return self._contexts.get(task_id)
 
+    async def trace_for(self, task_id: str) -> Any | None:
+        """The execution trace for one task.
+
+        A projection of the record's own events plus the context packet kept
+        for it — nothing is re-collected and no tool is called, so asking for a
+        trace can never change anything. Returns None when the task is unknown
+        or a trace could not be built; explainability is never load-bearing.
+        """
+        record = self._tasks.get(task_id)
+        if record is None:
+            return None
+        from app.trace.builder import safe_build
+
+        registry = None
+        try:
+            pool = self._pool
+            if pool is not None and pool.is_open:
+                registry = ToolRegistry(pool.sources)
+                await registry.refresh()
+        except Exception:  # noqa: BLE001 - tool purposes are a nicety
+            registry = None
+        return safe_build(record, context=self._contexts.get(task_id), registry=registry)
+
     async def current_context(self) -> PlanningContext:
         """What NEXUS can see right now, for the context panel.
 

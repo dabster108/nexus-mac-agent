@@ -305,6 +305,7 @@ def test_openapi_documents_every_endpoint(client: TestClient) -> None:
         "/api/tasks",
         "/api/tasks/{task_id}",
         "/api/tasks/{task_id}/cancel",
+        "/api/tasks/{task_id}/trace",
         "/api/tools",
         "/api/tools/{tool_name}",
         "/api/permissions/pending",
@@ -335,6 +336,7 @@ def test_openapi_documents_every_endpoint(client: TestClient) -> None:
         "memory",
         "observations",
         "suggestions",
+        "trace",
     }
 
 

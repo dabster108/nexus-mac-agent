@@ -41,6 +41,7 @@ TAGS_METADATA = [
     {"name": "permissions", "description": "Approve or deny CONFIRM tool calls."},
     {"name": "context", "description": "What NEXUS can currently see. Read-only."},
     {"name": "memory", "description": "What NEXUS remembers. Read-only; forgetting goes through approval."},
+    {"name": "trace", "description": "How NEXUS reached a result. Read-only."},
     {"name": "observations", "description": "What NEXUS noticed on its own. Read-only."},
     {"name": "suggestions", "description": "Next steps NEXUS offers. Read-only; accepting sends an ordinary chat message."},
     {"name": "mcp", "description": "MCP server status."},
