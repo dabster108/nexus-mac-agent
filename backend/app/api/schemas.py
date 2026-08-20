@@ -348,3 +348,54 @@ class SuggestionResponse(BaseModel):
 class SuggestionListResponse(BaseModel):
     suggestions: list[SuggestionResponse]
     count: int
+
+
+# --- trace (Phase 14) -------------------------------------------------------
+
+
+class TraceStepResponse(BaseModel):
+    """One thing that actually happened. Sanitised by the trace model."""
+
+    phase: str = Field(examples=["VERIFICATION"])
+    label: str
+    mark: str = Field(default="info", examples=["ok"])
+    detail: str | None = None
+    reason: str | None = Field(
+        default=None, description="Why this happened, from a deterministic rule."
+    )
+    tool: str | None = None
+    timestamp: str | None = None
+
+
+class TraceContextResponse(BaseModel):
+    kind: str = Field(examples=["memory"])
+    label: str
+    provided: bool = Field(
+        description=(
+            "Whether this was provided to the agent. Deliberately not 'used' — "
+            "whether the model's answer depended on it is not observable."
+        )
+    )
+    detail: str | None = None
+    reason: str | None = None
+
+
+class TraceEvidenceResponse(BaseModel):
+    statement: str
+    source: str = ""
+    kind: str = Field(default="OBSERVED", examples=["OBSERVED"])
+    confidence: str = Field(default="HIGH", examples=["HIGH"])
+
+
+class TraceResponse(BaseModel):
+    task_id: str
+    request: str
+    status: str
+    summary: str = Field(description="One plain sentence, composed from the steps.")
+    context: list[TraceContextResponse] = Field(default_factory=list)
+    steps: list[TraceStepResponse] = Field(default_factory=list)
+    evidence: list[TraceEvidenceResponse] = Field(default_factory=list)
+    outcome: str | None = None
+    outcome_reason: str = ""
+    created_at: str = ""
+    completed_at: str | None = None

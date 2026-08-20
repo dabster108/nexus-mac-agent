@@ -17,26 +17,26 @@
 const OUTCOME = {
   SUCCESS: {
     label: "Success",
-    tone: "text-[var(--ok)]",
+    tone: "text-[var(--ok-ink)]",
     edge: "var(--ok)",
     chip: "chip-ok",
   },
   PARTIAL_SUCCESS: {
     label: "Partly verified",
-    tone: "text-[var(--warn)]",
+    tone: "text-[var(--warn-ink)]",
     edge: "var(--warn)",
     chip: "chip-warn",
   },
   FAILED: {
     label: "Failed",
-    tone: "text-[var(--danger)]",
+    tone: "text-[var(--danger-ink)]",
     edge: "var(--danger)",
     chip: "chip-danger",
   },
   UNKNOWN: {
     label: "Unverified",
     tone: "text-[var(--ink-2)]",
-    edge: "var(--line-3)",
+    edge: "var(--line-2)",
     chip: "",
   },
 };
@@ -83,16 +83,15 @@ export function OutcomeCard({ verification, onSend }) {
   const unknowns = verification.unknowns ?? [];
 
   return (
-    <div className="enter-pop relative overflow-hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface-2)]">
-      <span
-        aria-hidden
-        className="absolute left-0 top-0 h-full w-[2px]"
-        style={{ background: style.edge }}
-      />
-
-      <div className="px-3.5 py-3 pl-4">
+    <div className="enter-pop overflow-hidden rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)]">
+      <div className="px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="mono text-[11px] text-[var(--ink-3)]">
+          <span
+            aria-hidden
+            className="h-[7px] w-[7px] rounded-full"
+            style={{ background: style.edge }}
+          />
+          <span className="mono text-[11.5px] text-[var(--ink-3)]">
             {verification.tool}
           </span>
           <span className={`chip ml-auto ${style.chip}`}>{style.label}</span>
@@ -100,7 +99,7 @@ export function OutcomeCard({ verification, onSend }) {
 
         <ul className="mt-2 space-y-1">
           {/* The action itself. Always a tick — it ran. */}
-          <li className="flex items-start gap-2 text-[12px] leading-[1.5]">
+          <li className="flex items-start gap-2 text-[12.5px] leading-[1.55]">
             <span className="mt-[3px]">
               <Tick />
             </span>
@@ -110,7 +109,7 @@ export function OutcomeCard({ verification, onSend }) {
           {evidence.map((statement, index) => (
             <li
               key={index}
-              className="flex items-start gap-2 text-[12px] leading-[1.5]"
+              className="flex items-start gap-2 text-[12.5px] leading-[1.55]"
             >
               <span className="mt-[3px]">{failed ? <Cross /> : <Tick />}</span>
               <span className="text-[var(--ink)]">{statement}</span>
@@ -120,7 +119,7 @@ export function OutcomeCard({ verification, onSend }) {
           {unknowns.map((statement, index) => (
             <li
               key={`u-${index}`}
-              className="flex items-start gap-2 text-[12px] leading-[1.5]"
+              className="flex items-start gap-2 text-[12.5px] leading-[1.55]"
             >
               <span className="mt-[3px]">
                 <Dash />
@@ -131,7 +130,7 @@ export function OutcomeCard({ verification, onSend }) {
         </ul>
 
         {verification.summary ? (
-          <p className={`mt-2.5 text-[12.5px] font-medium ${style.tone}`}>
+          <p className={`mt-2.5 text-[13px] font-semibold ${style.tone}`}>
             {verification.summary}
           </p>
         ) : null}
@@ -144,7 +143,7 @@ export function OutcomeCard({ verification, onSend }) {
                 `Investigate why ${verification.tool} did not work — read the logs and status and tell me what you find. Do not change anything.`,
               )
             }
-            className="btn btn-ghost mt-2.5 !px-2.5 !py-1 !text-[11px]"
+            className="btn btn-ghost btn-sm mt-3"
           >
             Investigate logs
           </button>

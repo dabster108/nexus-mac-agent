@@ -34,6 +34,7 @@ def meta(
     permission: Permission,
     prompt: str | None = None,
     verification: dict[str, Any] | None = None,
+    purpose: str | None = None,
 ) -> dict[str, Any]:
     """Build the ``_meta`` payload announcing a tool's classification.
 
@@ -54,6 +55,10 @@ def meta(
         payload["prompt"] = prompt
     if verification:
         payload["verification"] = dict(verification)
+    if purpose:
+        # One sentence, written for a person reading an execution trace. A
+        # tool's description is written for the model and reads poorly there.
+        payload["purpose"] = purpose
     return {META_NAMESPACE: payload}
 
 

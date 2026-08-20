@@ -74,6 +74,10 @@ export async function fetchTask(taskId, options) {
   return get(`/api/tasks/${taskId}`, options);
 }
 
+export async function fetchTrace(taskId, options) {
+  return get(`/api/tasks/${taskId}/trace`, options);
+}
+
 export async function fetchPending(options) {
   return get("/api/permissions/pending", options);
 }
