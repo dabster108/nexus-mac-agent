@@ -65,6 +65,7 @@ function workingLabel(events) {
 export default function Dashboard() {
   const {
     online,
+    hydrated,
     context,
     memories,
     observations,
@@ -104,6 +105,8 @@ export default function Dashboard() {
       memories={memories}
       observations={observations}
       suggestions={suggestions}
+      online={online}
+      hydrated={hydrated}
       onSend={(text) => {
         send(text);
         setRailOpen(false);

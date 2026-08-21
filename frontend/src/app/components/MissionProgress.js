@@ -81,7 +81,7 @@ export function MissionProgress({ mission }) {
     >
       <div className="px-4 pb-3 pt-3.5">
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-[13.5px] font-semibold leading-5">
+          <h3 className="min-w-0 break-words text-[13.5px] font-semibold leading-5">
             {mission.objective || "Working through this"}
           </h3>
           <span className="mono flex-none text-[11.5px] text-[var(--ink-3)]">
@@ -122,7 +122,7 @@ export function MissionProgress({ mission }) {
               <span className="mt-[2px] flex-none">
                 <Icon />
               </span>
-              <span className={`text-[13px] leading-[1.45] ${state.tone}`}>
+              <span className={`min-w-0 break-words text-[13px] leading-[1.45] ${state.tone}`}>
                 {step.label}
                 {/* Status in words too: colour alone must never carry it. */}
                 <span className="sr-only"> — {state.label}</span>

@@ -108,6 +108,23 @@ def test_a_tool_may_declare_its_own_level() -> None:
     assert classify("brand_new_tool", "totally-safe-honest") is PermissionLevel.RESTRICTED
 
 
+def test_a_declaration_outranks_the_baseline_table() -> None:
+    """Pin the precedence, because it is the surprising half of the rule.
+
+    A declaration wins even over a tool the baseline table already classifies.
+    That is safe only because the MCP server is a child process the operator
+    configured — it is not a defence against a hostile server, and the docs say
+    so. This test exists so that changing the precedence is a deliberate act
+    with a failing test attached, rather than a quiet edit.
+    """
+    assert classify("delete_file") is PermissionLevel.RESTRICTED
+    assert classify("delete_file", "SAFE") is PermissionLevel.SAFE
+
+    # The fallback still closes: an unusable declaration never opens the door.
+    assert classify("delete_file", "") is PermissionLevel.RESTRICTED
+    assert classify("delete_file", "SAFE-ISH") is PermissionLevel.RESTRICTED
+
+
 def test_safe_tools_run_without_approval() -> None:
     decision = PermissionPolicy().evaluate("battery_status", PermissionLevel.SAFE)
 

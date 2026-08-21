@@ -61,6 +61,9 @@ export function useNexus() {
   const [mission, setMission] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  /** Has the authoritative REST read finished once? Until it has, the UI
+   *  must not claim there is nothing to show — it does not know yet. */
+  const [hydrated, setHydrated] = useState(false);
 
   const activeTask = useRef(null);
   const socket = useRef(null);
@@ -82,9 +85,15 @@ export function useNexus() {
       setSuggestions(sug.suggestions ?? []);
       setPending(perm.requests ?? []);
       setOnline(true);
+      setHydrated(true);
       return true;
     } catch (err) {
-      if (err?.name !== "AbortError") setOnline(false);
+      if (err?.name !== "AbortError") {
+        setOnline(false);
+        // Hydrated means "we tried", not "we succeeded". A failed first read
+        // still ends the loading state — it just ends it as offline.
+        setHydrated(true);
+      }
       return false;
     }
   }, []);
@@ -437,6 +446,7 @@ export function useNexus() {
 
   return {
     online,
+    hydrated,
     context,
     memories,
     observations,

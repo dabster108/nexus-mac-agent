@@ -59,7 +59,7 @@ function RichText({ text }) {
       return (
         <code
           key={index}
-          className="mono rounded-[5px] border border-[var(--line)] bg-[var(--surface-2)] px-1.5 py-[1px] text-[0.86em] text-[var(--ink)]"
+          className="mono break-all rounded-[5px] border border-[var(--line)] bg-[var(--surface-2)] px-1.5 py-[1px] text-[0.86em] text-[var(--ink)]"
         >
           {part.slice(1, -1)}
         </code>
@@ -107,7 +107,7 @@ function Turn({ message, outcomes, mission, onSend, index }) {
   if (message.role === "user") {
     return (
       <div className="enter flex flex-col items-end gap-1" style={stagger}>
-        <div className="max-w-[80%] rounded-[14px] rounded-br-[4px] bg-[var(--ink)] px-4 py-2.5 text-[15px] leading-[1.6] text-white">
+        <div className="max-w-[80%] break-words rounded-[14px] rounded-br-[4px] bg-[var(--ink)] px-4 py-2.5 text-[15px] leading-[1.6] text-white">
           {message.text}
         </div>
         {time ? (
@@ -125,7 +125,7 @@ function Turn({ message, outcomes, mission, onSend, index }) {
       <Mark />
 
       <div className="min-w-0 flex-1">
-        <div className="max-w-[68ch] text-[15px] leading-[1.72] text-[var(--ink)]">
+        <div className="max-w-[68ch] break-words text-[15px] leading-[1.72] text-[var(--ink)]">
           <Answer text={message.text} />
         </div>
 

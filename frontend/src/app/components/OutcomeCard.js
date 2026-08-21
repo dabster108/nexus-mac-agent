@@ -91,7 +91,7 @@ export function OutcomeCard({ verification, onSend }) {
             className="h-[7px] w-[7px] rounded-full"
             style={{ background: style.edge }}
           />
-          <span className="mono text-[11.5px] text-[var(--ink-3)]">
+          <span className="mono min-w-0 truncate text-[11.5px] text-[var(--ink-3)]">
             {verification.tool}
           </span>
           <span className={`chip ml-auto ${style.chip}`}>{style.label}</span>
@@ -112,7 +112,7 @@ export function OutcomeCard({ verification, onSend }) {
               className="flex items-start gap-2 text-[12.5px] leading-[1.55]"
             >
               <span className="mt-[3px]">{failed ? <Cross /> : <Tick />}</span>
-              <span className="text-[var(--ink)]">{statement}</span>
+              <span className="min-w-0 break-words text-[var(--ink)]">{statement}</span>
             </li>
           ))}
 
@@ -124,7 +124,7 @@ export function OutcomeCard({ verification, onSend }) {
               <span className="mt-[3px]">
                 <Dash />
               </span>
-              <span className="text-[var(--ink-3)]">{statement}</span>
+              <span className="min-w-0 break-words text-[var(--ink-3)]">{statement}</span>
             </li>
           ))}
         </ul>

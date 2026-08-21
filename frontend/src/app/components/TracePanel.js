@@ -42,7 +42,7 @@ function Step({ step }) {
         {mark.glyph}
       </span>
       <div className="min-w-0">
-        <p className="text-[12.5px] leading-[1.5] text-[var(--ink)]">{step.label}</p>
+        <p className="break-words text-[12.5px] leading-[1.5] text-[var(--ink)]">{step.label}</p>
         {step.reason ? (
           <p className="text-[12px] leading-[1.45] text-[var(--ink-3)]">
             {step.reason}

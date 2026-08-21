@@ -27,6 +27,7 @@ from app.verification.models import (
     MAX_VERIFICATION_RUNTIME_SECONDS,
     MAX_VERIFICATION_STEPS,
     MAX_VERIFICATION_TOOL_CALLS,
+    Evidence,
     Outcome,
     Verification,
     unknown,
@@ -45,6 +46,20 @@ SETTLE_SECONDS = 1.5
 #: Re-checks allowed. One: past that we are polling, and a service that needs
 #: longer than this is better reported as PARTIAL than waited on.
 MAX_SETTLE_RETRIES = 1
+
+
+def _self_reported_failure(result: dict[str, Any]) -> str | None:
+    """The tool's own words, when its result says the action did not happen.
+
+    Deliberately narrow: only an explicit ``success: false``. An absent key is
+    not read as failure, because plenty of tools simply do not report one and
+    guessing is what this layer exists to avoid.
+    """
+    if not isinstance(result, dict) or result.get("success") is not False:
+        return None
+    reason = result.get("error") or result.get("message") or ""
+    text = str(reason).strip()
+    return text or "the tool reported that it did not succeed"
 
 
 class Verifier:
@@ -95,6 +110,21 @@ class Verifier:
         """Check one completed action. Never raises."""
         started = time.perf_counter()
         self._calls = 0
+
+        # The action's own result may already settle it. A tool that reports
+        # `success: false` did not do the thing, and saying "could not be
+        # verified" there understates what we plainly know — the same failure
+        # of honesty as claiming SUCCESS from a tool that merely returned.
+        # No tool call is needed: the refusal *is* the observation.
+        refusal = _self_reported_failure(result)
+        if refusal is not None:
+            return Verification(
+                tool=tool,
+                outcome=Outcome.FAILED,
+                summary="The action did not go through.",
+                evidence=(Evidence.observed(tool, refusal),),
+                duration_ms=(time.perf_counter() - started) * 1000,
+            )
 
         plan = build(
             tool=tool, registry=self._registry, result=result, arguments=arguments
