@@ -40,7 +40,18 @@ function Empty({ children }) {
   );
 }
 
-function Workspace({ context }) {
+/** Placeholder rows for the moment before the first authoritative read. */
+function Loading({ rows = 2 }) {
+  return (
+    <div className="space-y-2" aria-hidden>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="shimmer h-3" style={{ width: `${88 - i * 22}%` }} />
+      ))}
+    </div>
+  );
+}
+
+function Workspace({ context, state }) {
   const workspace = context?.active_workspace;
   const processes = context?.processes ?? [];
 
@@ -66,6 +77,10 @@ function Workspace({ context }) {
             </p>
           ) : null}
         </div>
+      ) : state === "loading" ? (
+        <Loading rows={2} />
+      ) : state === "offline" ? (
+        <Empty>Not connected, so NEXUS cannot say where you are working.</Empty>
       ) : (
         <Empty>
           No workspace identified yet. Mention a project and NEXUS will verify
@@ -120,12 +135,18 @@ function Attention({ suggestions, onAccept, onDismiss }) {
   );
 }
 
-function Activity({ observations, onSend, onDismiss }) {
+function Activity({ observations, onSend, onDismiss, state }) {
   const recent = observations.slice(0, 5);
   return (
     <Section title="Noticed" count={observations.length || null}>
       {recent.length === 0 ? (
-        <Empty>Nothing needs your attention.</Empty>
+        state === "loading" ? (
+          <Loading rows={2} />
+        ) : state === "offline" ? (
+          <Empty>Not connected — NEXUS may have noticed things since.</Empty>
+        ) : (
+          <Empty>Nothing needs your attention.</Empty>
+        )
       ) : (
         <ul className="space-y-0.5">
           {recent.map((observation) => {
@@ -190,7 +211,7 @@ function Activity({ observations, onSend, onDismiss }) {
   );
 }
 
-function Memory({ memories, onSend }) {
+function Memory({ memories, onSend, state }) {
   // Conflicting and stale first: those are the ones worth reading.
   const ordered = [...memories].sort(
     (a, b) => Number(Boolean(b.stale)) - Number(Boolean(a.stale)),
@@ -200,7 +221,13 @@ function Memory({ memories, onSend }) {
   return (
     <Section title="Remembers" count={memories.length || null}>
       {shown.length === 0 ? (
-        <Empty>NEXUS is not carrying anything forward yet.</Empty>
+        state === "loading" ? (
+          <Loading rows={2} />
+        ) : state === "offline" ? (
+          <Empty>Not connected, so what NEXUS remembers is unknown.</Empty>
+        ) : (
+          <Empty>NEXUS is not carrying anything forward yet.</Empty>
+        )
       ) : (
         <ul className="space-y-0.5">
           {shown.map((memory) => (
@@ -250,25 +277,38 @@ export function ContextRail({
   memories,
   observations,
   suggestions,
+  online,
+  hydrated,
   onSend,
   onDismissObservation,
   onAcceptSuggestion,
   onDismissSuggestion,
 }) {
+  // Three states, and they are not interchangeable: "still reading",
+  // "cannot reach the backend" and "read it, there is nothing".
+  const state = !hydrated ? "loading" : online === false ? "offline" : "ready";
+
   return (
     <div className="scroll h-full divide-y divide-[var(--line)] bg-[var(--bg)]">
+      {state === "offline" ? (
+        <p className="flex items-center gap-2 bg-[var(--warn-bg)] px-4 py-2.5 text-[12.5px] text-[var(--warn-ink)]">
+          <span aria-hidden className="dot dot-warn" />
+          Reconnecting — this is the last state NEXUS reported.
+        </p>
+      ) : null}
       <Attention
         suggestions={suggestions}
         onAccept={onAcceptSuggestion}
         onDismiss={onDismissSuggestion}
       />
-      <Workspace context={context} />
+      <Workspace context={context} state={state} />
       <Activity
         observations={observations}
         onSend={onSend}
         onDismiss={onDismissObservation}
+        state={state}
       />
-      <Memory memories={memories} onSend={onSend} />
+      <Memory memories={memories} onSend={onSend} state={state} />
     </div>
   );
 }

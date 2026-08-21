@@ -150,12 +150,20 @@ An MCP server declares NEXUS-specific facts under `_meta["nexus"]`
 
 Three deliberate limits on how far a server is trusted:
 
-- An **unclassified tool is not treated as safe.** `classify()` in
-  `app/tools/permissions.py` decides the level, and the declaration is an input
-  to that decision, not the final word. `DEFAULT_PERMISSION_LEVEL` is
-  `RESTRICTED`: classification is opt-in and never inferred, so a tool that
+- An **unclassified tool is not treated as safe.** `DEFAULT_PERMISSION_LEVEL`
+  is `RESTRICTED`: classification is opt-in and never inferred, so a tool that
   says nothing about itself is the most restricted thing in the system, not the
-  least.
+  least. A malformed or empty declaration falls back the same way.
+
+  The precedence in `classify()` is: **the tool's own declaration first**, then
+  the baseline table in `app/tools/permissions.py`, then `RESTRICTED`. A server
+  declaring `SAFE` for `run_command` would therefore get `SAFE`. That is
+  deliberate and it is safe *only* because of what the MCP server is here: a
+  child process the backend spawns itself, from a command in the operator's own
+  `.env`. Anyone who can change which server runs already has code execution as
+  the user, so the classifier is not the boundary that would stop them. It is
+  not a defence against a hostile or third-party MCP server, and NEXUS does not
+  connect to one.
 - **Prompt templates are bounded** — `MAX_PROMPT_TEMPLATE = 200` characters.
 - **Verification contracts are allowlisted.** `KNOWN_VERIFICATION_TYPES` is
   `{process, process_stopped, local_service, exit_code, application}`. A

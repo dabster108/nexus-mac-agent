@@ -52,11 +52,6 @@ export function basename(path) {
   return parts[parts.length - 1] || path;
 }
 
-/** Turn an event type into something readable without inventing detail. */
-export function eventLabel(type) {
-  return String(type ?? "").replace(/_/g, " ");
-}
-
 /** A memory value rendered compactly: `port 8123`, `path ~/x`. */
 export function summariseValue(value) {
   if (!value || typeof value !== "object") return String(value ?? "");

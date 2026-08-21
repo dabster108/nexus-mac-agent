@@ -316,6 +316,67 @@ async def test_the_verifier_runs_a_plan_end_to_end() -> None:
     assert verification.tool_calls == 2
 
 
+async def test_a_tool_that_reports_its_own_failure_is_FAILED_not_UNKNOWN() -> None:
+    """Found in the final acceptance pass.
+
+    ``start_process`` on an occupied port returns ``{"success": false, ...}``.
+    Because no process_id came back there was nothing to look up, so the plan
+    could establish nothing and the outcome was UNKNOWN — "could not be
+    verified" for an action whose own result said plainly that it did not
+    happen. That understates what NEXUS knows, which is the same failure of
+    honesty as reporting SUCCESS from a tool that merely returned.
+    """
+    source = FakeToolSource(
+        [
+            definition(
+                "start_process",
+                PermissionLevel.CONFIRM,
+                {"type": "process", "process_id_from": "result", "url_from": "result"},
+            ),
+            definition("process_status"),
+        ]
+    )
+    registry = await registry_with(source)
+
+    verification = await Verifier(registry).verify(
+        tool="start_process",
+        result={"success": False, "error": "Port 8124 is already in use."},
+        arguments={},
+    )
+
+    assert verification.outcome is Outcome.FAILED
+    # The tool's own words, as observed evidence — no inference, no tool call.
+    assert verification.tool_calls == 0
+    assert any("8124" in e.statement for e in verification.evidence)
+    assert all(e.kind is Kind.OBSERVED for e in verification.evidence)
+
+
+async def test_a_result_without_a_success_flag_is_not_read_as_failure() -> None:
+    """The check is narrow on purpose: absent is not false."""
+    source = FakeToolSource(
+        [
+            definition(
+                "start_process",
+                PermissionLevel.CONFIRM,
+                {"type": "process", "process_id_from": "result"},
+            ),
+            definition("process_status"),
+        ],
+        {
+            "process_status": ToolResult(
+                content="", structured={"success": True, "status": "RUNNING"}
+            ),
+        },
+    )
+    registry = await registry_with(source)
+
+    verification = await Verifier(registry).verify(
+        tool="start_process", result={"process_id": "p1"}, arguments={}
+    )
+
+    assert verification.outcome is not Outcome.FAILED
+
+
 async def test_the_verifier_never_calls_a_non_safe_tool() -> None:
     """A verifier that could reach a CONFIRM tool would be a machine-changing
     action nobody approved."""
