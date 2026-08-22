@@ -49,6 +49,7 @@ function workingLabel(events) {
       "verification_started",
       "permission_required",
       "mission_plan_created",
+      "mission_waiting_approval",
     ].includes(e.type),
   );
   return (
@@ -58,6 +59,7 @@ function workingLabel(events) {
       verification_started: "Verifying the result",
       permission_required: "Waiting for approval",
       mission_plan_created: "Planning the steps",
+      mission_waiting_approval: "Waiting for approval",
     }[last?.type] ?? "Thinking"
   );
 }
@@ -75,6 +77,7 @@ export default function Dashboard() {
     events,
     outcomes,
     mission,
+    mcp,
     busy,
     error,
     send,
@@ -97,6 +100,9 @@ export default function Dashboard() {
     observations.filter((o) => ["ERROR", "WARNING"].includes(o.severity)).length +
     suggestions.length;
 
+  const macServer = mcp.find((s) => s.name === "nexus-mac") ?? mcp[0];
+  const macConnected = macServer?.status === "connected";
+
   const workspace = context?.active_workspace;
 
   const rail = (
@@ -117,6 +123,7 @@ export default function Dashboard() {
         setRailOpen(false);
       }}
       onDismissSuggestion={dismissSuggestion}
+      mcp={mcp}
     />
   );
 
@@ -146,6 +153,20 @@ export default function Dashboard() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          {hydrated && macServer ? (
+            macConnected ? (
+              <span className="chip hidden sm:inline-flex">
+                <span className="dot dot-live" />
+                Mac · {macServer.tools} tools
+              </span>
+            ) : (
+              <span className="chip chip-warn hidden sm:inline-flex">
+                <span className="dot dot-warn" />
+                Mac offline
+              </span>
+            )
+          ) : null}
+
           {online === false ? (
             <span className="chip chip-warn">
               <span className="dot dot-danger" />

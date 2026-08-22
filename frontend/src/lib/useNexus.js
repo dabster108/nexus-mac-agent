@@ -25,6 +25,7 @@ import {
   dismissSuggestion,
   fetchContext,
   fetchHealth,
+  fetchMcpServers,
   fetchMemories,
   fetchObservations,
   fetchPending,
@@ -41,6 +42,74 @@ const CONTEXT_POLL_MS = 15000;
 const MAX_EVENTS = 150;
 
 const TERMINAL = ["completed", "error", "cancelled"];
+
+/** Rebuild mission progress and outcomes from a task's event log. Used when
+ *  the WebSocket dropped but the backend finished the run. */
+function rebuildFromEvents(events, taskId) {
+  let mission = null;
+  const outcomes = [];
+
+  for (const event of events ?? []) {
+    const type = event.type;
+
+    if (type === "mission_started") {
+      mission = { taskId, objective: event.message ?? "", steps: [] };
+    }
+    if (type === "mission_plan_created" && mission) {
+      mission = {
+        ...mission,
+        steps: (event.steps ?? []).map((step) => ({
+          id: step.id,
+          label: step.description ?? step.tool ?? "step",
+          state: "pending",
+        })),
+      };
+    }
+    if (type === "mission_waiting_approval" && mission) {
+      const stepId = event.step_id;
+      mission = {
+        ...mission,
+        steps: mission.steps.map((s) =>
+          s.id === stepId ? { ...s, state: "waiting" } : s,
+        ),
+      };
+    }
+    if (type?.startsWith("mission_step_")) {
+      const state = {
+        mission_step_started: "running",
+        mission_step_completed: "done",
+        mission_step_failed: "failed",
+        mission_step_skipped: "skipped",
+      }[type];
+      if (state && mission) {
+        const stepId = event.step_id;
+        mission = {
+          ...mission,
+          steps: mission.steps.map((s) =>
+            s.id === stepId ? { ...s, state } : s,
+          ),
+        };
+      }
+    }
+    if (
+      ["mission_completed", "mission_failed", "mission_cancelled"].includes(type) &&
+      mission
+    ) {
+      mission = { ...mission, finished: true };
+    }
+    if (type === "verification_completed") {
+      outcomes.push({
+        tool: event.tool,
+        outcome: event.outcome,
+        summary: event.message,
+        evidence: event.evidence ?? [],
+        unknowns: event.unknowns ?? [],
+      });
+    }
+  }
+
+  return { mission, outcomes };
+}
 
 /** When a turn appeared in *this session* — a transcript detail, not backend
  *  state. The backend timestamps events; it does not timestamp the reply. */
@@ -59,6 +128,8 @@ export function useNexus() {
   const [outcomes, setOutcomes] = useState({});
   /** taskId -> { objective, steps[] }; only while a mission is running. */
   const [mission, setMission] = useState(null);
+  /** MCP server status from GET /api/mcp/servers — confirms Mac tools are reachable. */
+  const [mcp, setMcp] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   /** Has the authoritative REST read finished once? Until it has, the UI
@@ -72,18 +143,20 @@ export function useNexus() {
 
   const loadAuthoritative = useCallback(async (signal) => {
     try {
-      const [ctx, mem, obs, sug, perm] = await Promise.all([
+      const [ctx, mem, obs, sug, perm, mcpBody] = await Promise.all([
         fetchContext({ signal }),
         fetchMemories({ signal }),
         fetchObservations({ signal }),
         fetchSuggestions({ signal }),
         fetchPending({ signal }),
+        fetchMcpServers({ signal }).catch(() => ({ servers: [] })),
       ]);
       setContext(ctx);
       setMemories(mem.memories ?? []);
       setObservations(obs.observations ?? []);
       setSuggestions(sug.suggestions ?? []);
       setPending(perm.requests ?? []);
+      setMcp(mcpBody.servers ?? []);
       setOnline(true);
       setHydrated(true);
       return true;
@@ -104,6 +177,15 @@ export function useNexus() {
       setOnline(true);
     } catch {
       setOnline(false);
+    }
+  }, []);
+
+  const refreshMemories = useCallback(async () => {
+    try {
+      const body = await fetchMemories();
+      setMemories(body.memories ?? []);
+    } catch {
+      /* connectivity is reported by the context poll */
     }
   }, []);
 
@@ -153,6 +235,7 @@ export function useNexus() {
         return;
       }
       socket.current = ws;
+      let ping;
 
       ws.onopen = () => {
         setOnline(true);
@@ -160,6 +243,12 @@ export function useNexus() {
         // authoritative state is re-read rather than assumed still correct.
         if (everConnected) loadAuthoritative();
         everConnected = true;
+        // Keep the connection warm through long approval waits.
+        ping = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "ping" }));
+          }
+        }, 30000);
       };
 
       ws.onmessage = (raw) => {
@@ -214,6 +303,11 @@ export function useNexus() {
         setEvents((current) => [...current, event].slice(-MAX_EVENTS));
 
         if (type === "permission_required") refreshPending();
+
+        // Memory changes go straight to the rail; no dedicated WS panel for them.
+        if (["memory_saved", "memory_deleted", "memory_conflict"].includes(type)) {
+          refreshMemories();
+        }
 
         // --- everything below belongs to the task in flight ---------------
         if (!event.task_id || event.task_id !== activeTask.current) return;
@@ -272,6 +366,18 @@ export function useNexus() {
             return { ...current, steps };
           });
         }
+        if (type === "mission_waiting_approval") {
+          setMission((current) => {
+            if (current?.taskId !== taskId) return current;
+            const stepId = event.step_id;
+            return {
+              ...current,
+              steps: current.steps.map((s) =>
+                s.id === stepId ? { ...s, state: "waiting" } : s,
+              ),
+            };
+          });
+        }
         if (["mission_completed", "mission_failed", "mission_cancelled"].includes(type)) {
           setMission((current) =>
             current?.taskId === taskId ? { ...current, finished: true } : current,
@@ -295,6 +401,7 @@ export function useNexus() {
       };
 
       ws.onclose = () => {
+        clearInterval(ping);
         if (!closed) retry = setTimeout(connect, 2000);
       };
       ws.onerror = () => ws.close();
@@ -306,7 +413,7 @@ export function useNexus() {
       clearTimeout(retry);
       socket.current?.close();
     };
-  }, [loadAuthoritative, refreshContext, refreshPending]);
+  }, [loadAuthoritative, refreshContext, refreshMemories, refreshPending]);
 
   // --- sending -------------------------------------------------------------
 
@@ -361,6 +468,16 @@ export function useNexus() {
                   { role: "nexus", text: task.response, taskId, at: _now() },
                 ],
           );
+        }
+        const rebuilt = rebuildFromEvents(task.events, taskId);
+        if (rebuilt.outcomes.length) {
+          setOutcomes((current) => ({
+            ...current,
+            [taskId]: rebuilt.outcomes,
+          }));
+        }
+        if (rebuilt.mission) {
+          setMission(rebuilt.mission);
         }
         setBusy(false);
         activeTask.current = null;
@@ -456,6 +573,7 @@ export function useNexus() {
     events,
     outcomes,
     mission,
+    mcp,
     busy,
     error,
     send,
