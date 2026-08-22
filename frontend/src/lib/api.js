@@ -82,6 +82,10 @@ export async function fetchPending(options) {
   return get("/api/permissions/pending", options);
 }
 
+export async function fetchMcpServers(options) {
+  return get("/api/mcp/servers", options);
+}
+
 export async function sendMessage(message) {
   const response = await fetch(`${BASE}/api/chat`, {
     method: "POST",

@@ -58,9 +58,25 @@ function Pending() {
   );
 }
 
+function Waiting() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="8" cy="8" r="7" fill="var(--warn-bg)" stroke="var(--warn)" />
+      <path
+        d="M8 5v3.5l2 1.5"
+        stroke="var(--warn)"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 const STATE = {
   done: { Icon: Check, label: "done", tone: "text-[var(--ink-2)]" },
   running: { Icon: Running, label: "running", tone: "text-[var(--ink)] font-medium" },
+  waiting: { Icon: Waiting, label: "waiting for approval", tone: "text-[var(--warn-ink)] font-medium" },
   failed: { Icon: Failed, label: "failed", tone: "text-[var(--ink)]" },
   skipped: { Icon: Pending, label: "skipped", tone: "text-[var(--ink-3)]" },
   pending: { Icon: Pending, label: "waiting", tone: "text-[var(--ink-3)]" },
@@ -73,6 +89,8 @@ export function MissionProgress({ mission }) {
   const done = mission.steps.filter((s) => s.state === "done").length;
   const failed = mission.steps.some((s) => s.state === "failed");
   const running = mission.steps.find((s) => s.state === "running");
+  const waiting = mission.steps.find((s) => s.state === "waiting");
+  const active = waiting ?? running;
 
   return (
     <section
@@ -106,9 +124,9 @@ export function MissionProgress({ mission }) {
           />
         </div>
 
-        {running ? (
+        {active ? (
           <p className="mt-2 text-[12.5px] text-[var(--ink-2)]">
-            Currently: {running.label}
+            Currently: {active.label}
           </p>
         ) : null}
       </div>

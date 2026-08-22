@@ -279,6 +279,7 @@ export function ContextRail({
   suggestions,
   online,
   hydrated,
+  mcp = [],
   onSend,
   onDismissObservation,
   onAcceptSuggestion,
@@ -288,27 +289,54 @@ export function ContextRail({
   // "cannot reach the backend" and "read it, there is nothing".
   const state = !hydrated ? "loading" : online === false ? "offline" : "ready";
 
+  const macServer = mcp.find((s) => s.name === "nexus-mac") ?? mcp[0];
+
   return (
-    <div className="scroll h-full divide-y divide-[var(--line)] bg-[var(--bg)]">
-      {state === "offline" ? (
-        <p className="flex items-center gap-2 bg-[var(--warn-bg)] px-4 py-2.5 text-[12.5px] text-[var(--warn-ink)]">
-          <span aria-hidden className="dot dot-warn" />
-          Reconnecting — this is the last state NEXUS reported.
-        </p>
+    <div className="scroll flex h-full flex-col bg-[var(--bg)]">
+      <div className="min-h-0 flex-1 divide-y divide-[var(--line)]">
+        {state === "offline" ? (
+          <p className="flex items-center gap-2 bg-[var(--warn-bg)] px-4 py-2.5 text-[12.5px] text-[var(--warn-ink)]">
+            <span aria-hidden className="dot dot-warn" />
+            Reconnecting — this is the last state NEXUS reported.
+          </p>
+        ) : null}
+        <Attention
+          suggestions={suggestions}
+          onAccept={onAcceptSuggestion}
+          onDismiss={onDismissSuggestion}
+        />
+        <Workspace context={context} state={state} />
+        <Activity
+          observations={observations}
+          onSend={onSend}
+          onDismiss={onDismissObservation}
+          state={state}
+        />
+        <Memory memories={memories} onSend={onSend} state={state} />
+      </div>
+
+      {macServer ? (
+        <footer className="flex-none border-t border-[var(--line)] px-4 py-2.5">
+          <p className="flex items-center gap-2 text-[11.5px] text-[var(--ink-3)]">
+            <span
+              aria-hidden
+              className={`dot ${
+                macServer.status === "connected" ? "dot-live" : "dot-warn"
+              }`}
+            />
+            {macServer.status === "connected" ? (
+              <>
+                Mac connected · {macServer.tools} tools available
+              </>
+            ) : (
+              <>
+                Mac tools unavailable
+                {macServer.reason ? ` — ${macServer.reason}` : ""}
+              </>
+            )}
+          </p>
+        </footer>
       ) : null}
-      <Attention
-        suggestions={suggestions}
-        onAccept={onAcceptSuggestion}
-        onDismiss={onDismissSuggestion}
-      />
-      <Workspace context={context} state={state} />
-      <Activity
-        observations={observations}
-        onSend={onSend}
-        onDismiss={onDismissObservation}
-        state={state}
-      />
-      <Memory memories={memories} onSend={onSend} state={state} />
     </div>
   );
 }
