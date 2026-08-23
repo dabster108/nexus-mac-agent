@@ -72,6 +72,7 @@ export default function Dashboard() {
     memories,
     observations,
     suggestions,
+    tools,
     pending,
     messages,
     events,
@@ -111,6 +112,7 @@ export default function Dashboard() {
       memories={memories}
       observations={observations}
       suggestions={suggestions}
+      tools={tools}
       online={online}
       hydrated={hydrated}
       onSend={(text) => {
@@ -204,6 +206,7 @@ export default function Dashboard() {
             busy={busy}
             outcomes={outcomes}
             mission={mission}
+            tools={tools}
             workingLabel={workingLabel(events)}
             onSend={send}
           />

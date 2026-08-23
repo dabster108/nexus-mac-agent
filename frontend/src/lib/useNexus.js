@@ -31,6 +31,7 @@ import {
   fetchPending,
   fetchSuggestions,
   fetchTask,
+  fetchTools,
   resolvePermission,
   sendMessage,
 } from "./api";
@@ -130,6 +131,8 @@ export function useNexus() {
   const [mission, setMission] = useState(null);
   /** MCP server status from GET /api/mcp/servers — confirms Mac tools are reachable. */
   const [mcp, setMcp] = useState([]);
+  /** Mac tools from GET /api/tools — what the agent can call. */
+  const [tools, setTools] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   /** Has the authoritative REST read finished once? Until it has, the UI
@@ -143,13 +146,14 @@ export function useNexus() {
 
   const loadAuthoritative = useCallback(async (signal) => {
     try {
-      const [ctx, mem, obs, sug, perm, mcpBody] = await Promise.all([
+      const [ctx, mem, obs, sug, perm, mcpBody, toolBody] = await Promise.all([
         fetchContext({ signal }),
         fetchMemories({ signal }),
         fetchObservations({ signal }),
         fetchSuggestions({ signal }),
         fetchPending({ signal }),
         fetchMcpServers({ signal }).catch(() => ({ servers: [] })),
+        fetchTools({ signal }).catch(() => ({ tools: [] })),
       ]);
       setContext(ctx);
       setMemories(mem.memories ?? []);
@@ -157,6 +161,7 @@ export function useNexus() {
       setSuggestions(sug.suggestions ?? []);
       setPending(perm.requests ?? []);
       setMcp(mcpBody.servers ?? []);
+      setTools(toolBody.tools ?? []);
       setOnline(true);
       setHydrated(true);
       return true;
@@ -574,6 +579,7 @@ export function useNexus() {
     outcomes,
     mission,
     mcp,
+    tools,
     busy,
     error,
     send,

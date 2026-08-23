@@ -16,6 +16,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.nodes import (
+    DEFAULT_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     after_tools,
     agent_node,
@@ -43,7 +44,7 @@ def build_agent_graph(
     max_iterations: int = 6,
     timeout: float = 60.0,
     permission_timeout: float = 300.0,
-    system_prompt: str = SYSTEM_PROMPT,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
 ) -> Any:
     """Compile the NEXUS agent graph.
 

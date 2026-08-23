@@ -22,6 +22,7 @@ from app.core.logging import get_logger, safe_keys
 from app.models.base import ModelProvider, content_to_text
 from app.tools.permissions import PermissionDecision, PermissionLevel, PermissionPolicy
 from app.tools.registry import ToolRegistry
+from app.agent.soul import agent_system_prompt
 
 logger = get_logger(__name__)
 
@@ -99,6 +100,8 @@ did not read. If the logs were empty, say the logs were empty. An investigation
 that ends in "I could not tell from what I can see, but the logs would show it"
 is a good answer; an invented cause is not.
 """
+
+DEFAULT_SYSTEM_PROMPT = agent_system_prompt(SYSTEM_PROMPT)
 
 #: How many tools may be run for a single assistant turn. The step budget
 #: bounds how many *turns* a task takes, which is no protection at all against
@@ -212,7 +215,7 @@ async def agent_node(
     max_iterations: int,
     timeout: float,
     emit: ev.EventSink = ev.no_sink,
-    system_prompt: str = SYSTEM_PROMPT,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
 ) -> dict[str, Any]:
     """Ask the model for the next step."""
     task_id = state["task_id"]
@@ -637,6 +640,7 @@ def after_tools(state: AgentState) -> Literal["agent", "end"]:
 
 
 __all__ = [
+    "DEFAULT_SYSTEM_PROMPT",
     "SYSTEM_PROMPT",
     "after_tools",
     "agent_node",

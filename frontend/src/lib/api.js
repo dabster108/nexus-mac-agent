@@ -86,6 +86,10 @@ export async function fetchMcpServers(options) {
   return get("/api/mcp/servers", options);
 }
 
+export async function fetchTools(options) {
+  return get("/api/tools", options);
+}
+
 export async function sendMessage(message) {
   const response = await fetch(`${BASE}/api/chat`, {
     method: "POST",
