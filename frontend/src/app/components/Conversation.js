@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { clockTime } from "@/lib/format";
+import { TOOL_EXAMPLES } from "@/lib/tools";
 import { MissionProgress } from "./MissionProgress";
 import { OutcomeCard } from "./OutcomeCard";
 import { TracePanel } from "./TracePanel";
@@ -20,12 +21,7 @@ import { TracePanel } from "./TracePanel";
  * like a dashboard.
  */
 
-const OPENERS = [
-  { label: "Continue where I left off", hint: "picks up your last session" },
-  { label: "What am I working on?", hint: "workspace, branch, processes" },
-  { label: "What changed recently?", hint: "reads your git history" },
-  { label: "What happened?", hint: "anything NEXUS noticed" },
-];
+const OPENERS = TOOL_EXAMPLES;
 
 /** The assistant's mark: small, blue, and the same every time. */
 function Mark() {
@@ -41,6 +37,62 @@ function Mark() {
         />
       </svg>
     </span>
+  );
+}
+
+function Welcome({ onSend, tools = [] }) {
+  const safeCount = tools.filter((tool) => tool.permission === "SAFE").length;
+  const confirmCount = tools.filter((tool) => tool.permission === "CONFIRM").length;
+  const toolLine =
+    tools.length > 0
+      ? `${tools.length} Mac tools are connected — ${safeCount} read-only, ${confirmCount} ask before they run.`
+      : "I can read your workspace, git, processes, and files on this Mac.";
+
+  return (
+    <div className="mx-auto flex h-full max-w-2xl flex-col justify-center px-6 py-10">
+      <span
+        aria-hidden
+        className="enter grid h-11 w-11 place-items-center rounded-[13px] border border-[var(--accent-line)] bg-[var(--accent-bg)]"
+        style={{ "--i": 0 }}
+      >
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+          <path
+            d="M8 2.2l1.5 3.9 3.9 1.5-3.9 1.5L8 13l-1.5-3.9L2.6 7.6l3.9-1.5L8 2.2z"
+            fill="var(--accent)"
+          />
+        </svg>
+      </span>
+
+      <h1 className="enter t-h1 mt-6" style={{ "--i": 1 }}>
+        Hi — what would you like to look at?
+      </h1>
+      <p
+        className="enter t-body mt-3 max-w-lg"
+        style={{ "--i": 2 }}
+      >
+        I&rsquo;m here on your Mac. {toolLine} Ask in plain language — I&rsquo;ll
+        check before I answer, and I&rsquo;ll ask before I change anything.
+      </p>
+
+      <div className="mt-9 grid w-full gap-2 sm:grid-cols-2">
+        {OPENERS.map((item, index) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => onSend(item.label)}
+            style={{ "--i": index + 3 }}
+            className="enter lift rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] px-4 py-3.5 text-left"
+          >
+            <span className="block text-[14px] font-medium leading-5">
+              {item.label}
+            </span>
+            <span className="mt-1 block text-[12.5px] leading-4 text-[var(--ink-3)]">
+              {item.hint}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -171,61 +223,12 @@ function Working({ label }) {
   );
 }
 
-function Welcome({ onSend }) {
-  return (
-    <div className="mx-auto flex h-full max-w-2xl flex-col justify-center px-6 py-10">
-      <span
-        aria-hidden
-        className="enter grid h-11 w-11 place-items-center rounded-[13px] border border-[var(--accent-line)] bg-[var(--accent-bg)]"
-        style={{ "--i": 0 }}
-      >
-        <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
-          <path
-            d="M8 2.2l1.5 3.9 3.9 1.5-3.9 1.5L8 13l-1.5-3.9L2.6 7.6l3.9-1.5L8 2.2z"
-            fill="var(--accent)"
-          />
-        </svg>
-      </span>
-
-      <h1 className="enter t-h1 mt-6" style={{ "--i": 1 }}>
-        What can I help you with?
-      </h1>
-      <p
-        className="enter t-body mt-3 max-w-lg"
-        style={{ "--i": 2 }}
-      >
-        I can see your workspace, what&rsquo;s running, and what I&rsquo;ve been
-        told to remember. Ask me anything about this Mac — I&rsquo;ll check
-        before I answer, and ask before I change anything.
-      </p>
-
-      <div className="mt-9 grid w-full gap-2 sm:grid-cols-2">
-        {OPENERS.map((item, index) => (
-          <button
-            key={item.label}
-            type="button"
-            onClick={() => onSend(item.label)}
-            style={{ "--i": index + 3 }}
-            className="enter lift rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] px-4 py-3.5 text-left"
-          >
-            <span className="block text-[14px] font-medium leading-5">
-              {item.label}
-            </span>
-            <span className="mt-1 block text-[12.5px] leading-4 text-[var(--ink-3)]">
-              {item.hint}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function Conversation({
   messages,
   busy,
   outcomes = {},
   mission = null,
+  tools = [],
   workingLabel = "Thinking",
   onSend,
 }) {
@@ -238,7 +241,7 @@ export function Conversation({
   if (messages.length === 0) {
     return (
       <div className="flex-1 overflow-hidden">
-        <Welcome onSend={onSend} />
+        <Welcome onSend={onSend} tools={tools} />
       </div>
     );
   }

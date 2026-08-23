@@ -25,7 +25,8 @@ from app.agent import events as ev
 from app.agent.approvals import ApprovalBroker, get_approval_broker
 from app.agent.events import EventSink
 from app.agent.graph import build_agent_graph
-from app.agent.nodes import SYSTEM_PROMPT
+from app.agent.nodes import DEFAULT_SYSTEM_PROMPT, SYSTEM_PROMPT
+from app.agent.soul import agent_system_prompt
 from app.agent.state import initial_state
 from app.agent.tasks import TaskRecord, TaskStatus, TaskStore, get_task_store
 from app.context.memory_events import (
@@ -345,14 +346,14 @@ class AgentRunner:
             )
         except Exception:  # noqa: BLE001 - context is an enhancement, never a gate
             logger.warning("Context collection failed", exc_info=True, extra={"task_id": task_id})
-            return SYSTEM_PROMPT
+            return DEFAULT_SYSTEM_PROMPT
 
         self._contexts[task_id] = context
         self._consider_memory_suggestion(text, context)
         block = context.to_prompt_block(budget.max_chars, budget.max_memory_chars)
         if not block:
-            return SYSTEM_PROMPT
-        return f"{SYSTEM_PROMPT}\n\n{block}"
+            return DEFAULT_SYSTEM_PROMPT
+        return agent_system_prompt(SYSTEM_PROMPT, context_block=block)
 
     @staticmethod
     def _consider_memory_suggestion(text: str, context: PlanningContext) -> None:

@@ -2,6 +2,7 @@
 
 import { basename, relativeTime, shortenPath, summariseValue } from "@/lib/format";
 import { SuggestionCard } from "./SuggestionCard";
+import { ToolsPanel } from "./ToolsPanel";
 
 /**
  * Quiet environmental awareness.
@@ -277,6 +278,7 @@ export function ContextRail({
   memories,
   observations,
   suggestions,
+  tools = [],
   online,
   hydrated,
   mcp = [],
@@ -313,6 +315,7 @@ export function ContextRail({
           state={state}
         />
         <Memory memories={memories} onSend={onSend} state={state} />
+        <ToolsPanel tools={tools} state={state} onTry={onSend} />
       </div>
 
       {macServer ? (
