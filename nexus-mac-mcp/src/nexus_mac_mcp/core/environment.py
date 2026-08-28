@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from functools import lru_cache
 from pathlib import Path
 
 #: Inherited by name, because tools genuinely need them (caches, locale,
@@ -54,9 +55,8 @@ FORCED_VARIABLES: dict[str, str] = {
 }
 
 
-def path_directories() -> tuple[str, ...]:
-    """The executable search path, overridable with ``NEXUS_MAC_COMMAND_PATH``."""
-    raw = os.getenv("NEXUS_MAC_COMMAND_PATH", "").strip()
+@lru_cache(maxsize=8)
+def _path_directories(raw: str) -> tuple[str, ...]:
     entries = (
         [item.strip() for item in raw.split(":") if item.strip()]
         if raw
@@ -65,19 +65,30 @@ def path_directories() -> tuple[str, ...]:
     return tuple(str(Path(entry).expanduser()) for entry in entries)
 
 
+def path_directories() -> tuple[str, ...]:
+    """The executable search path, overridable with ``NEXUS_MAC_COMMAND_PATH``."""
+    return _path_directories(os.getenv("NEXUS_MAC_COMMAND_PATH", "").strip())
+
+
+@lru_cache(maxsize=8)
+def _joined_path(directories: tuple[str, ...]) -> str:
+    return ":".join(directories)
+
+
 def build_environment() -> dict[str, str]:
     """The complete environment a command will see."""
     environment = {
         name: os.environ[name] for name in INHERITED_VARIABLES if name in os.environ
     }
     environment.update(FORCED_VARIABLES)
-    environment["PATH"] = ":".join(path_directories())
+    directories = path_directories()
+    environment["PATH"] = _joined_path(directories)
     return environment
 
 
 def resolve_executable(name: str) -> str | None:
     """Find an executable on the controlled path, or return None."""
-    return shutil.which(name, path=":".join(path_directories()))
+    return shutil.which(name, path=_joined_path(path_directories()))
 
 
 def describe_environment() -> dict[str, object]:

@@ -130,11 +130,11 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="flex h-full flex-col bg-[var(--bg)]">
+    <div className="dashboard-shell flex h-full flex-col bg-[var(--bg)]">
       {/* --- a thin header: identity, where you are, connection ----------- */}
-      <header className="flex h-14 flex-none items-center gap-3 border-b border-[var(--line)] bg-[var(--surface)] px-4 sm:px-6">
+      <header className="dashboard-header flex h-14 flex-none items-center gap-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-4 backdrop-blur-[14px] sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="grid h-[26px] w-[26px] place-items-center rounded-[8px] bg-[var(--accent)] text-[12px] font-bold text-white">
+          <span className="brand-mark grid h-[26px] w-[26px] place-items-center rounded-[8px] bg-[var(--accent)] text-[12px] font-bold text-white">
             N
           </span>
           <span className="text-[13.5px] font-bold tracking-[0.14em]">NEXUS</span>
@@ -200,7 +200,7 @@ export default function Dashboard() {
 
       {/* --- conversation + rail ------------------------------------------ */}
       <div className="flex min-h-0 flex-1">
-        <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg-1)]">
+        <main className="flex min-w-0 flex-1 flex-col bg-[color-mix(in_srgb,var(--bg-1)_88%,transparent)]">
           <Conversation
             messages={messages}
             busy={busy}
@@ -228,7 +228,7 @@ export default function Dashboard() {
           )}
         </main>
 
-        <aside className="hidden w-[300px] flex-none border-l border-[var(--line)] xl:block">
+        <aside className="context-rail hidden w-[300px] flex-none border-l border-[var(--line)] xl:block">
           {rail}
         </aside>
       </div>
@@ -243,7 +243,7 @@ export default function Dashboard() {
             className="enter-fade absolute inset-0 bg-[rgb(15_23_42/0.32)]"
           />
           <div
-            className="absolute inset-y-0 right-0 flex w-[310px] max-w-[86vw] flex-col border-l border-[var(--line)] bg-[var(--bg)] shadow-[var(--shadow-lg)]"
+            className="context-rail absolute inset-y-0 right-0 flex w-[310px] max-w-[86vw] flex-col border-l border-[var(--line)] bg-[var(--bg)] shadow-[var(--shadow-lg)]"
             style={{ animation: "slide-x var(--t-slow) var(--ease) both" }}
           >
             <div className="flex h-14 flex-none items-center justify-between border-b border-[var(--line)] px-4">

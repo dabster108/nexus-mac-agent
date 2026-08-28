@@ -11,6 +11,7 @@ that exist to hold credentials (``.ssh`` and friends) are not entered at all.
 from __future__ import annotations
 
 from collections import deque
+import heapq
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ from nexus_mac_mcp.core.filesystem import (
 
 #: Read in one go for the binary sniff; files above the limit are rejected anyway.
 _SNIFF_BYTES = 8192
+_MAX_SEARCH_QUEUE = 10_000
 
 
 def _failure(error: str) -> dict[str, Any]:
@@ -40,8 +42,10 @@ def list_directory(
     policy = policy_or_default(policy)
     try:
         target = resolve_safe_path(path, policy=policy, require_directory=True)
-        entries = sorted(
-            target.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold())
+        entries = heapq.nsmallest(
+            policy.max_entries + 1,
+            target.iterdir(),
+            key=lambda item: (not item.is_dir(), item.name.casefold()),
         )
     except PathError as exc:
         return _failure(str(exc))
@@ -102,28 +106,30 @@ def search_files(
             truncated = True
             break
         try:
-            children = sorted(current.iterdir(), key=lambda item: item.name.casefold())
+            children = current.iterdir()
+            for child in children:
+                if needle in child.name.casefold():
+                    match: dict[str, Any] = {"path": str(child), "type": entry_type(child)}
+                    if is_secret_file(child, policy):
+                        match["protected"] = True
+                    matches.append(match)
+                    if len(matches) >= policy.max_matches:
+                        truncated = True
+                        queue.clear()
+                        break
+                # Never descend through a link: it could leave the workspace.
+                if (
+                    len(queue) < _MAX_SEARCH_QUEUE
+                    and child.is_dir()
+                    and not child.is_symlink()
+                    and depth + 1 <= policy.max_depth
+                    and not should_skip_directory(child, policy)
+                ):
+                    queue.append((child, depth + 1))
+                elif len(queue) >= _MAX_SEARCH_QUEUE:
+                    truncated = True
         except (OSError, PermissionError):
             continue
-
-        for child in children:
-            if needle in child.name.casefold():
-                match: dict[str, Any] = {"path": str(child), "type": entry_type(child)}
-                if is_secret_file(child, policy):
-                    match["protected"] = True
-                matches.append(match)
-                if len(matches) >= policy.max_matches:
-                    truncated = True
-                    queue.clear()
-                    break
-            # Never descend through a link: it could leave the workspace.
-            if (
-                child.is_dir()
-                and not child.is_symlink()
-                and depth + 1 <= policy.max_depth
-                and not should_skip_directory(child, policy)
-            ):
-                queue.append((child, depth + 1))
 
     return {
         "success": True,

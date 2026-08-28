@@ -294,7 +294,7 @@ export function ContextRail({
   const macServer = mcp.find((s) => s.name === "nexus-mac") ?? mcp[0];
 
   return (
-    <div className="scroll flex h-full flex-col bg-[var(--bg)]">
+    <div className="context-rail scroll flex h-full flex-col bg-[var(--bg)]">
       <div className="min-h-0 flex-1 divide-y divide-[var(--line)]">
         {state === "offline" ? (
           <p className="flex items-center gap-2 bg-[var(--warn-bg)] px-4 py-2.5 text-[12.5px] text-[var(--warn-ink)]">

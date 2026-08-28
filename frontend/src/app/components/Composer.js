@@ -54,9 +54,9 @@ export function Composer({ busy, onSend, onStop }) {
   };
 
   return (
-    <div className="border-t border-[var(--line)] bg-[var(--bg-1)] px-4 py-3 sm:px-6">
+    <div className="composer-shell border-t border-[var(--line)] px-4 py-3 sm:px-6">
       <div
-        className="mx-auto flex max-w-3xl items-end gap-2 rounded-[var(--r-lg)] border bg-[var(--surface)] px-3.5 py-2.5 transition-[border-color,box-shadow] duration-200"
+        className="composer-input mx-auto flex max-w-3xl items-end gap-2 rounded-[var(--r-xl)] border bg-[var(--surface)] px-3.5 py-2.5 transition-[border-color,box-shadow] duration-200"
         style={{
           borderColor: focused ? "var(--accent)" : "var(--line-2)",
           boxShadow: focused ? "var(--ring)" : "none",

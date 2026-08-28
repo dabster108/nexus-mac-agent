@@ -63,7 +63,7 @@ export function ProductPreview() {
   return (
     <div ref={wrapRef} className="relative" style={{ perspective: "1600px" }}>
       <div
-        className="relative overflow-hidden rounded-[var(--r-xl)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="window-frame relative overflow-hidden rounded-[var(--r-2xl)] border bg-[var(--surface)]"
         style={{
           transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
           transformStyle: "preserve-3d",
