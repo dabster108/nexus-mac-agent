@@ -11,10 +11,13 @@ from __future__ import annotations
 import subprocess
 import sys
 from dataclasses import dataclass
+from threading import Thread
+from typing import BinaryIO
 
 MACOS_REQUIRED_MESSAGE = "NEXUS Mac MCP requires macOS."
 
 DEFAULT_TIMEOUT = 5.0
+MAX_OUTPUT_BYTES = 100_000
 
 
 def is_macos() -> bool:
@@ -35,6 +38,21 @@ class CommandError(RuntimeError):
 class CommandResult:
     stdout: str
     stderr: str
+    truncated: bool = False
+
+
+def _drain_limited(
+    stream: BinaryIO, limit: int, output: list[bytes], truncated: list[bool]
+) -> None:
+    """Drain a pipe completely while retaining only a bounded prefix."""
+    retained = 0
+    while chunk := stream.read(8192):
+        if retained < limit:
+            keep = chunk[: limit - retained]
+            output.append(keep)
+            retained += len(keep)
+        if len(chunk) > max(0, limit - retained):
+            truncated[0] = True
 
 
 def run(argv: list[str], timeout: float = DEFAULT_TIMEOUT) -> CommandResult:
@@ -46,22 +64,54 @@ def run(argv: list[str], timeout: float = DEFAULT_TIMEOUT) -> CommandResult:
     if not argv or not argv[0].startswith("/"):
         raise CommandError("Refusing to run a command without an absolute path.")
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv, never shell
+        process = subprocess.Popen(  # noqa: S603 - fixed argv, never shell
             argv,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
     except FileNotFoundError as exc:
         raise CommandError(f"{argv[0]} is not available on this system.") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise CommandError(f"{argv[0]} did not respond in time.") from exc
     except OSError as exc:
         raise CommandError(f"Could not run {argv[0]}: {exc.strerror or exc}.") from exc
 
-    if completed.returncode != 0:
-        detail = completed.stderr.strip().splitlines()
-        reason = detail[0] if detail else f"exit code {completed.returncode}"
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
+    stdout_truncated = [False]
+    stderr_truncated = [False]
+    readers = [
+        Thread(
+            target=_drain_limited,
+            args=(process.stdout, MAX_OUTPUT_BYTES, stdout_chunks, stdout_truncated),
+            daemon=True,
+        ),
+        Thread(
+            target=_drain_limited,
+            args=(process.stderr, MAX_OUTPUT_BYTES, stderr_chunks, stderr_truncated),
+            daemon=True,
+        ),
+    ]
+    for reader in readers:
+        reader.start()
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        process.wait()
+        for reader in readers:
+            reader.join()
+        raise CommandError(f"{argv[0]} did not respond in time.") from exc
+    for reader in readers:
+        reader.join()
+
+    stdout = b"".join(stdout_chunks).decode("utf-8", errors="replace")
+    stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+    if process.returncode != 0:
+        detail = stderr.strip().splitlines()
+        reason = detail[0] if detail else f"exit code {process.returncode}"
         raise CommandError(f"{argv[0]} failed: {reason}")
-    return CommandResult(stdout=completed.stdout, stderr=completed.stderr)
+    return CommandResult(
+        stdout=stdout,
+        stderr=stderr,
+        truncated=stdout_truncated[0] or stderr_truncated[0],
+    )

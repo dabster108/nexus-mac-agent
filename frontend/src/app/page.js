@@ -50,7 +50,7 @@ const GUARANTEES = [
 function Logo() {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="grid h-7 w-7 place-items-center rounded-[9px] bg-[var(--accent)] text-[12px] font-bold text-white">
+      <span className="brand-mark grid h-7 w-7 place-items-center rounded-[9px] bg-[var(--accent)] text-[12px] font-bold text-white">
         N
       </span>
       <span className="text-[14px] font-bold tracking-[0.14em]">NEXUS</span>
@@ -74,9 +74,9 @@ function ArrowIcon() {
 
 export default function Landing() {
   return (
-    <div className="relative min-h-full overflow-x-hidden">
+    <div className="premium-landing relative min-h-full overflow-x-hidden">
       {/* --- header --------------------------------------------------------- */}
-      <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] backdrop-blur-[6px]">
+      <header className="premium-nav sticky top-0 z-50 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--bg)_78%,transparent)] backdrop-blur-[14px]">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5 sm:px-8">
           <Logo />
           <nav className="flex items-center gap-1.5">
@@ -101,10 +101,11 @@ export default function Landing() {
       </header>
 
       {/* --- hero ----------------------------------------------------------- */}
-      <section className="relative">
+      <section className="relative overflow-hidden">
         <div aria-hidden className="absolute inset-0 -z-10 h-[120%] max-h-[900px]">
           <div className="wash absolute inset-0" />
           <div className="absolute inset-x-0 bottom-0 h-52 bg-gradient-to-b from-transparent to-[var(--bg)]" />
+          <div className="hero-orb" />
         </div>
 
         <div className="mx-auto max-w-6xl px-5 pb-16 pt-20 sm:px-8 sm:pb-24 sm:pt-28">
@@ -118,7 +119,7 @@ export default function Landing() {
             </span>
 
             <h1
-              className="enter t-display mt-6 text-balance"
+              className="hero-title enter t-display mt-6 text-balance"
               style={{ "--i": 1 }}
             >
               An AI layer that understands
