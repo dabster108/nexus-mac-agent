@@ -32,12 +32,9 @@ async def _drain_client(websocket: WebSocket) -> None:
 async def _forward_events(
     websocket: WebSocket,
     queue: asyncio.Queue[dict[str, Any]],
-    task_id: str | None,
 ) -> None:
     while True:
         event = await queue.get()
-        if task_id and event.get("task_id") != task_id:
-            continue
         await websocket.send_json(event)
 
 
@@ -52,7 +49,7 @@ async def agent_events(
     await websocket.accept()
     logger.info("WebSocket client connected (task filter: %s)", task_id or "none")
 
-    async with store.subscribe() as queue:
+    async with store.subscribe(task_id) as queue:
         try:
             await websocket.send_json({"type": "connected", "task_id": task_id})
             # Let a late subscriber catch up on a task that is already running.
@@ -62,7 +59,7 @@ async def agent_events(
                     for event in replay(record):
                         await websocket.send_json(event)
 
-            forwarder = asyncio.create_task(_forward_events(websocket, queue, task_id))
+            forwarder = asyncio.create_task(_forward_events(websocket, queue))
             receiver = asyncio.create_task(_drain_client(websocket))
             done, pending = await asyncio.wait(
                 {forwarder, receiver}, return_when=asyncio.FIRST_COMPLETED

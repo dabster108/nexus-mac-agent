@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import OrderedDict
 from collections.abc import Sequence
 from contextlib import AsyncExitStack
 from functools import lru_cache
@@ -90,7 +91,7 @@ class AgentRunner:
         self._missions = mission_store or get_mission_store()
         # Context gathered per task, so the UI can show what informed an
         # answer. Bounded by the task store's own retention.
-        self._contexts: dict[str, PlanningContext] = {}
+        self._contexts: OrderedDict[str, PlanningContext] = OrderedDict()
         self._context_cache: tuple[float, PlanningContext] | None = None
 
     @property
@@ -275,14 +276,12 @@ class AgentRunner:
                 system_prompt=system_prompt,
             )
 
-            final_state: dict[str, Any] = {}
-            # Events are delivered by the sink as they happen, so only the final
-            # state is taken from the stream — publishing here too would double
-            # every event.
-            async for chunk in graph.astream(
-                initial_state(task_id, text), stream_mode="values"
-            ):
-                final_state = chunk
+            # Events are delivered by the sink as they happen. We only need the
+            # final state, so invoke directly instead of allocating every
+            # intermediate full-state snapshot.
+            final_state: dict[str, Any] = await graph.ainvoke(
+                initial_state(task_id, text)
+            )
             emit_memory_outcome_events(final_state.get("tool_results") or [], task_id, emit)
             self._record_outcomes(final_state, record)
             return final_state
@@ -349,6 +348,11 @@ class AgentRunner:
             return DEFAULT_SYSTEM_PROMPT
 
         self._contexts[task_id] = context
+        self._contexts.move_to_end(task_id)
+        active_task_ids = {record.task_id for record in self._tasks.list_tasks()}
+        for retained_id in list(self._contexts):
+            if retained_id not in active_task_ids:
+                self._contexts.pop(retained_id, None)
         self._consider_memory_suggestion(text, context)
         block = context.to_prompt_block(budget.max_chars, budget.max_memory_chars)
         if not block:

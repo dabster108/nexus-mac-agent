@@ -6,6 +6,7 @@ This is the only place where MCP concepts are translated into the neutral
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
@@ -121,35 +122,51 @@ class MCPToolSource:
 
     def __init__(self, session: MCPSession) -> None:
         self._session = session
+        self._definitions: tuple[ToolDefinition, ...] | None = None
+        self._discovery_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
         return self._session.server_name
 
     async def list_tools(self) -> Sequence[ToolDefinition]:
-        definitions: list[ToolDefinition] = []
-        for tool in await self._session.list_tools():
-            permission = classify(tool.name, _declared_permission(tool.meta))
-            definitions.append(
-                ToolDefinition(
-                    name=tool.name,
-                    description=tool.description,
-                    input_schema=tool.input_schema,
-                    source=self.name,
-                    permission=permission,
-                    prompt_template=_declared_prompt(tool.meta),
-                    meta=_tool_meta(tool.meta),
-                )
-            )
-        logger.info(
-            "Discovered %d tool(s) from MCP server '%s'", len(definitions), self.name
-        )
-        return definitions
+        if self._definitions is None:
+            async with self._discovery_lock:
+                if self._definitions is None:
+                    definitions: list[ToolDefinition] = []
+                    for tool in await self._session.list_tools():
+                        permission = classify(tool.name, _declared_permission(tool.meta))
+                        definitions.append(
+                            ToolDefinition(
+                                name=tool.name,
+                                description=tool.description,
+                                input_schema=tool.input_schema,
+                                source=self.name,
+                                permission=permission,
+                                prompt_template=_declared_prompt(tool.meta),
+                                meta=_tool_meta(tool.meta),
+                            )
+                        )
+                    self._definitions = tuple(definitions)
+                    logger.info(
+                        "Discovered %d tool(s) from MCP server '%s'",
+                        len(definitions),
+                        self.name,
+                    )
+        return list(self._definitions or ())
+
+    def invalidate(self) -> None:
+        """Discard the catalog after a transport failure."""
+        self._definitions = None
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         # Argument *values* are never logged — they may hold file or clipboard data.
         logger.info("Calling MCP tool '%s' (args: %s)", name, safe_keys(arguments))
-        result = await self._session.call_tool(name, arguments)
+        try:
+            result = await self._session.call_tool(name, arguments)
+        except MCPError:
+            self.invalidate()
+            raise
         return ToolResult(
             content=result.text,
             structured=result.structured,
