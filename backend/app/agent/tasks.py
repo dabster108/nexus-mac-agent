@@ -115,7 +115,9 @@ class TaskStore:
     def __init__(self, max_tasks: int = MAX_TASKS) -> None:
         self._tasks: OrderedDict[str, TaskRecord] = OrderedDict()
         self._max_tasks = max_tasks
-        self._subscribers: list[asyncio.Queue[dict[str, Any]]] = []
+        self._subscribers: list[
+            tuple[asyncio.Queue[dict[str, Any]], str | None]
+        ] = []
         self._runs: dict[str, asyncio.Task[Any]] = {}
 
     # --- records -----------------------------------------------------
@@ -201,22 +203,30 @@ class TaskStore:
         self._broadcast(payload)
 
     def _broadcast(self, payload: dict[str, Any]) -> None:
-        for queue in list(self._subscribers):
+        event_task_id = payload.get("task_id")
+        for queue, task_id in list(self._subscribers):
+            if task_id and event_task_id != task_id:
+                continue
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:  # pragma: no cover - slow consumer
-                self._subscribers.remove(queue)
+                self._subscribers = [
+                    item for item in self._subscribers if item[0] is not queue
+                ]
 
     @asynccontextmanager
-    async def subscribe(self) -> AsyncIterator[asyncio.Queue[dict[str, Any]]]:
-        """Yield a queue receiving every event emitted while subscribed."""
+    async def subscribe(
+        self, task_id: str | None = None
+    ) -> AsyncIterator[asyncio.Queue[dict[str, Any]]]:
+        """Yield a queue receiving matching events emitted while subscribed."""
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(SUBSCRIBER_QUEUE_SIZE)
-        self._subscribers.append(queue)
+        self._subscribers.append((queue, task_id))
         try:
             yield queue
         finally:
-            if queue in self._subscribers:
-                self._subscribers.remove(queue)
+            self._subscribers = [
+                item for item in self._subscribers if item[0] is not queue
+            ]
 
     @property
     def subscriber_count(self) -> int:

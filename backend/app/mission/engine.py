@@ -432,9 +432,12 @@ class MissionEngine:
         )
 
         instruction = self._instruction_for(mission, step)
-        final_state: dict[str, Any] = {}
-        async for chunk in graph.astream(initial_state(step_record.task_id, instruction), stream_mode="values"):
-            final_state = chunk
+        # Events are delivered through the mission sink as they happen. The
+        # engine only needs the final state, so avoid allocating every
+        # intermediate full-state snapshot from stream_mode="values".
+        final_state: dict[str, Any] = await graph.ainvoke(
+            initial_state(step_record.task_id, instruction)
+        )
 
         mission.tool_call_count += len(final_state.get("tool_results") or [])
         for result in final_state.get("tool_results") or []:

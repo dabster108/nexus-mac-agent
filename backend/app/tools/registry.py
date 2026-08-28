@@ -87,6 +87,7 @@ class ToolRegistry:
         self._sources: list[ToolSource] = list(sources)
         self._definitions: dict[str, ToolDefinition] = {}
         self._owners: dict[str, ToolSource] = {}
+        self._model_specs_cache: dict[tuple[PermissionLevel, ...], list[ToolSpec]] = {}
 
     def add_source(self, source: ToolSource) -> None:
         self._sources.append(source)
@@ -107,6 +108,7 @@ class ToolRegistry:
                 owners[definition.name] = source
         self._definitions = definitions
         self._owners = owners
+        self._model_specs_cache.clear()
 
     def list_tools(self) -> list[ToolDefinition]:
         return sorted(self._definitions.values(), key=lambda tool: tool.name)
@@ -130,11 +132,17 @@ class ToolRegistry:
         to propose an action the backend would always refuse.
         """
         excluded = set(exclude)
-        return [
+        cache_key = tuple(exclude)
+        cached = self._model_specs_cache.get(cache_key)
+        if cached is not None:
+            return list(cached)
+        specs = [
             tool.to_model_spec()
             for tool in self.list_tools()
             if tool.permission not in excluded
         ]
+        self._model_specs_cache[cache_key] = specs
+        return list(specs)
 
     async def call(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool. Permission checks happen *before* this is reached."""
