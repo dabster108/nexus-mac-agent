@@ -74,7 +74,7 @@ a later phase — refusing them is what makes the approval model meaningful.
                         MCP over stdio (JSON-RPC)
                  ┌───────────────▼───────────────────────┐
                  │  nexus-mac-mcp  (child process)       │
-                 │  24 tools · macOS · ~/.nexus/nexus.db │
+                 │  25 tools · macOS · ~/.nexus/nexus.db │
                  └───────────────────────────────────────┘
                                  │
                          Model API (Groq / Mistral)
@@ -177,14 +177,14 @@ above it speaks `ToolDefinition` / `ToolResult`.
 
 ## 4. Tool architecture
 
-Twenty-four tools, all in `nexus-mac-mcp`. Eighteen SAFE, six CONFIRM.
+Twenty-five tools, all in `nexus-mac-mcp`. Nineteen SAFE, six CONFIRM.
 
 **SAFE — read-only, run without asking:**
 
 | Area | Tools |
 |---|---|
 | System | `system_info`, `battery_status` |
-| Workspace | `detect_workspace`, `list_directory`, `read_file`, `search_files` |
+| Workspace | `detect_workspace`, `repo_overview`, `list_directory`, `read_file`, `search_files` |
 | Git | `git_status`, `git_branch`, `git_log`, `git_diff` |
 | Processes | `list_processes`, `running_processes`, `process_status`, `process_logs` |
 | Network | `check_local_service` |

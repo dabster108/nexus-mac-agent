@@ -26,6 +26,7 @@ NEXUS Mac MCP  ── stdio ──  MCP protocol
 | `search_files` | SAFE | Find files by name under a directory |
 | `read_file` | SAFE | Read a text file. Refuses secrets, binaries, large files |
 | `detect_workspace` | SAFE | What kind of project a directory holds |
+| `repo_overview` | SAFE | Bounded project structure, languages, manifests and entry points |
 | `git_status` | SAFE | Branch, tracking position, changed files |
 | `git_branch` | SAFE | Local branches and the current one |
 | `git_log` | SAFE | Recent commits |
@@ -181,7 +182,7 @@ src/nexus_mac_mcp/
 │   ├── system.py     battery_status, system_info, running_processes
 │   ├── applications.py  open_application and safe name resolution
 │   ├── files.py      list_directory, search_files, read_file
-│   ├── workspace.py  detect_workspace (no commands, inspection only)
+│   ├── workspace.py  workspace detection and repo overview (no commands)
 │   ├── git.py        four fixed read-only Git commands
 │   ├── commands.py   run_command: execution, limits, timeout, cleanup
 │   ├── processes.py  start/list/status/logs/stop

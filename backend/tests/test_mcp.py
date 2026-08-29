@@ -36,6 +36,7 @@ async def test_the_client_lists_the_mac_tools(settings: Settings) -> None:
         "search_files",
         "read_file",
         "detect_workspace",
+        "repo_overview",
         "git_status",
         "git_branch",
         "git_log",
@@ -83,6 +84,7 @@ async def test_tools_arrive_with_their_permission_level(settings: Settings) -> N
         "search_files",
         "read_file",
         "detect_workspace",
+        "repo_overview",
         "git_status",
         "git_branch",
         "git_log",
@@ -166,6 +168,7 @@ async def test_read_only_tools_never_ask_for_approval(settings: Settings) -> Non
             "search_files",
             "read_file",
             "detect_workspace",
+            "repo_overview",
             "git_status",
             "git_branch",
             "git_log",
@@ -210,7 +213,7 @@ async def test_every_discovered_tool_is_classified(settings: Settings) -> None:
         await registry.refresh()
         tools = registry.list_tools()
 
-    assert len(tools) == 24
+    assert len(tools) == 25
     assert all(tool.permission in PermissionLevel for tool in tools)
     assert not [tool for tool in tools if tool.permission is PermissionLevel.RESTRICTED]
 

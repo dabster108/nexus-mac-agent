@@ -21,7 +21,7 @@ from nexus_mac_mcp.tools.processes import (
     stop_process,
 )
 from nexus_mac_mcp.tools.system import battery_status, running_processes, system_info
-from nexus_mac_mcp.tools.workspace import detect_workspace
+from nexus_mac_mcp.tools.workspace import detect_workspace, repo_overview
 
 __all__ = [
     "battery_status",
@@ -38,6 +38,7 @@ __all__ = [
     "process_logs",
     "process_status",
     "read_file",
+    "repo_overview",
     "resolve_application",
     "run_command",
     "running_processes",

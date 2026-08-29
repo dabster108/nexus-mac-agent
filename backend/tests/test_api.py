@@ -227,7 +227,7 @@ def test_mcp_servers_reports_the_mac_server(client: TestClient) -> None:
     server = body["servers"][0]
     assert server["name"] == "nexus-mac"
     assert server["status"] == "connected"
-    assert server["tools"] == 24
+    assert server["tools"] == 25
 
 
 def test_mcp_servers_reports_a_disconnected_server(

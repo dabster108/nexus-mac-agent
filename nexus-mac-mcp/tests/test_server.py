@@ -23,6 +23,7 @@ EXPECTED_TOOLS = {
     "read_file": Permission.SAFE,
     # workspace
     "detect_workspace": Permission.SAFE,
+    "repo_overview": Permission.SAFE,
     # git — read-only
     "git_status": Permission.SAFE,
     "git_branch": Permission.SAFE,
