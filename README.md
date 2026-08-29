@@ -1,16 +1,36 @@
+<div align="center">
+
 # NEXUS
 
-A local AI operating assistant for macOS.
+### A local AI operating layer for macOS
 
-NEXUS understands the context you are working in, executes approved actions
-through MCP, verifies that they achieved what was asked, remembers durable
-facts across sessions, notices when your machine changes, offers suggestions,
-and can explain what it did and why.
+Understand your workspace. Act with approval. Verify the result.
 
-It is not a chatbot with plugins. It is a three-process system: a browser UI,
-an agent runtime, and a Mac-side MCP server. The model never touches macOS
-directly. Every capability is a named tool, classified `SAFE`, `CONFIRM` or
-`RESTRICTED`, reached only through the agent graph.
+NEXUS gives an AI agent a bounded, explainable view of your Mac — your
+workspace, Git state, processes, local services, and durable project memory —
+without turning your computer into an unattended automation target.
+
+<p>
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#what-nexus-does">Capabilities</a> ·
+  <a href="#trust-model">Trust model</a> ·
+  <a href="DECISIONS.md">Architecture decisions</a>
+</p>
+
+</div>
+
+---
+
+## Why NEXUS
+
+Most AI developer tools begin with a blank chat. NEXUS begins with the
+environment you are already working in. It gathers relevant context, lets
+LangGraph choose from discovered MCP tools, pauses before anything changes
+your Mac, and reports the evidence behind the result.
+
+It is deliberately local, single-user, and approval-gated. The model chooses
+what to ask for; the backend decides what may run; the Mac MCP server performs
+the capability behind a real process boundary.
 
 ```text
 ┌─────────────┐   HTTP / WebSocket    ┌──────────────────────────┐
@@ -33,6 +53,37 @@ must never be given one.
 
 For the full architecture decision record — every mechanism, limit and
 rationale, read out of the source — see **[DECISIONS.md](DECISIONS.md)**.
+
+---
+
+## What NEXUS does
+
+### Context-aware assistance
+
+- Detects the active workspace, Git branch, changed files, and running
+  development processes
+- Retrieves relevant durable memories from SQLite across sessions
+- Uses deterministic intent and context rules before asking the model to act
+
+### Controlled execution
+
+- Discovers 25 capabilities from the bundled `nexus-mac-mcp` server
+- Keeps read-only tools `SAFE`, machine-changing tools `CONFIRM`, and unknown
+  tools `RESTRICTED`
+- Routes every action through LangGraph, the tool registry, and the approval
+  broker
+
+### Closed-loop results
+
+- Verifies declared actions with independent SAFE-only checks
+- Distinguishes `SUCCESS`, `PARTIAL_SUCCESS`, `FAILED`, and `UNKNOWN`
+- Shows evidence and a read-only execution trace instead of invented certainty
+
+### Proactive, never autonomous
+
+- Notices process failures, service changes, Git changes, and memory conflicts
+- Offers suggestions as ordinary questions, never as hidden tool calls
+- Keeps the user in control of every operation that changes the machine
 
 ---
 
@@ -75,7 +126,7 @@ on the WebSocket.
 
 ---
 
-## The vocabulary
+## Product model
 
 These words mean specific, non-interchangeable things.
 
@@ -118,7 +169,7 @@ These words mean specific, non-interchangeable things.
 
 ---
 
-## Four guarantees
+## Trust model
 
 **Proactive does not mean autonomous.** NEXUS observes on its own, offers on
 its own, and explains on its own. Between noticing a problem and changing
@@ -144,31 +195,40 @@ reasoning, because reasoning is not recorded anywhere.
 
 ---
 
-## Running it locally
+## Quick start
 
-Requirements: macOS, Python 3.14+, [uv](https://docs.astral.sh/uv/), Node.js,
-and a Groq or Mistral API key.
+NEXUS currently runs on macOS and requires:
 
-### 1. Backend (also starts the MCP server)
+- Python 3.14+
+- [uv](https://docs.astral.sh/uv/)
+- Node.js and npm
+- A tool-calling model from Groq or Mistral
+
+The backend and MCP server are local. The model provider is the only external
+service NEXUS contacts.
+
+### 1. Configure and start the backend
 
 ```bash
 cd backend
 uv sync
 cp .env.example .env
-#   set GROQ_API_KEY, and GROQ_MODEL to a model your account actually has.
-#   Model ids are deliberately not defaulted — if the one you name is retired,
-#   every request fails with a clear message until you change it.
+#   Set GROQ_API_KEY and GROQ_MODEL to a model your account can use.
+#   Or configure MISTRAL_API_KEY, MISTRAL_MODEL and
+#   DEFAULT_MODEL_PROVIDER=mistral.
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Check it came up, and which model it resolved:
+The backend automatically starts the bundled MCP server over stdio. Verify both
+the API and the MCP connection:
 
 ```bash
 curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/api/models
+curl http://127.0.0.1:8000/api/mcp/servers
 ```
 
-### 2. Frontend
+### 2. Start the frontend
 
 ```bash
 cd frontend
@@ -176,14 +236,16 @@ npm install
 npm run dev            # http://localhost:3000
 ```
 
-It talks to `http://127.0.0.1:8000` by default. To point it elsewhere, set
-`NEXT_PUBLIC_NEXUS_API`.
+Open <http://localhost:3000/dashboard>. The frontend talks to
+`http://127.0.0.1:8000` by default. To point it elsewhere, set
+`NEXT_PUBLIC_NEXUS_API` before starting Next.js.
 
-### 3. The MCP server
+### 3. MCP lifecycle
 
-You do not start it yourself — the backend spawns it as a child process over
-stdio and keeps the pool open, so a process started in one turn is still there
-in the next. To run it standalone for debugging only:
+You do not start the MCP server yourself during normal use. The backend spawns
+it as a child process over stdio and keeps the session pool open, so a process
+started in one turn remains available in the next. Run it standalone only for
+protocol debugging:
 
 ```bash
 cd nexus-mac-mcp
@@ -208,9 +270,9 @@ Interactive API docs: <http://127.0.0.1:8000/docs>.
 ### Tests
 
 ```bash
-cd backend        && uv run pytest                  # 503
-cd nexus-mac-mcp  && uv run pytest                  # 511, no windows opened
-cd nexus-mac-mcp  && uv run pytest -m integration   # 5, opens TextEdit
+cd backend        && uv run pytest
+cd nexus-mac-mcp  && uv run pytest                  # no windows opened
+cd nexus-mac-mcp  && uv run pytest -m integration   # opt-in macOS checks
 cd frontend       && npm run lint && npm run build
 ```
 
