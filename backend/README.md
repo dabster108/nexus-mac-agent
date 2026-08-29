@@ -141,12 +141,14 @@ table in `app/tools/permissions.py`.
 
 macOS capabilities live in a separate project, [`../nexus-mac-mcp`](../nexus-mac-mcp),
 installed here as an editable dependency. The backend launches it over stdio as
-a child process for the duration of each agent run, then shuts it down.
+a child process during application startup and keeps the MCP session pool open
+until shutdown.
 
-It exposes nineteen tools — system state, read-only filesystem access,
-workspace detection, read-only Git, managed-process views and a loopback health
-check (all SAFE), plus `open_application`, `run_command`, `start_process` and
-`stop_process` (CONFIRM). The backend discovers them through MCP; no tool is
+It exposes twenty-five tools — system state, read-only filesystem access,
+workspace detection and repository overview, read-only Git, managed-process
+views and a loopback health check (all SAFE), plus `open_application`,
+`run_command`, `start_process`, `stop_process`, `save_memory` and
+`delete_memory` (CONFIRM). The backend discovers them through MCP; no tool is
 hard-coded into the API, and there are deliberately no `/api/files`,
 `/api/git`, `/api/workspace` or `/api/processes` endpoints.
 

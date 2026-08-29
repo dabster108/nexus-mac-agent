@@ -182,6 +182,29 @@ def create_server() -> MCPServer:
     ) -> dict[str, Any]:
         return workspace.detect_workspace(path)
 
+    @server.tool(
+        name="repo_overview",
+        description=(
+            "Create a bounded map of a repository or project: its structure, "
+            "languages, manifests, entry points, and project type. Read-only; "
+            "does not read source contents or run commands."
+        ),
+        meta=SAFE,
+    )
+    def repo_overview(
+        path: Annotated[str, Field(description="Project directory to inspect.")],
+        depth: Annotated[
+            int,
+            Field(
+                default=workspace.DEFAULT_OVERVIEW_DEPTH,
+                ge=1,
+                le=workspace.MAX_OVERVIEW_DEPTH,
+                description="How many directory levels to include.",
+            ),
+        ] = workspace.DEFAULT_OVERVIEW_DEPTH,
+    ) -> dict[str, Any]:
+        return workspace.repo_overview(path, depth)
+
     # --- git (SAFE, read-only) ---------------------------------------
     @server.tool(
         name="git_status",

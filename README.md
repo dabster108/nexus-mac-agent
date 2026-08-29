@@ -83,7 +83,7 @@ These words mean specific, non-interchangeable things.
 
 | Level | Meaning |
 | --- | --- |
-| **SAFE** | Read-only. Runs immediately, no approval. 18 of the 24 tools. |
+| **SAFE** | Read-only. Runs immediately, no approval. 19 of the 25 tools. |
 | **CONFIRM** | Changes something. Always stops for a human decision. 6 tools. |
 | **RESTRICTED** | Never executed. Also the default for any tool nobody classified. |
 

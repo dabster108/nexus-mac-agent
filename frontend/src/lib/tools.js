@@ -6,7 +6,7 @@
 export const TOOL_CATEGORIES = [
   { id: "system", label: "System", tools: ["battery_status", "system_info", "running_processes"] },
   { id: "workspace", label: "Workspace & Git", tools: [
-    "detect_workspace", "git_status", "git_branch", "git_log", "git_diff",
+    "detect_workspace", "repo_overview", "git_status", "git_branch", "git_log", "git_diff",
   ]},
   { id: "files", label: "Files", tools: ["list_directory", "search_files", "read_file"] },
   { id: "processes", label: "Processes", tools: [
@@ -28,6 +28,7 @@ export function toolLabel(name) {
       system_info: "System info",
       running_processes: "Running apps",
       detect_workspace: "Find workspace",
+      repo_overview: "Project overview",
       git_status: "Git status",
       git_branch: "Current branch",
       git_log: "Recent commits",
