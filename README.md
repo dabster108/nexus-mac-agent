@@ -1,14 +1,20 @@
 <div align="center">
 
-# NEXUS
+<h1>NEXUS.ai</h1>
 
-### A local AI operating layer for macOS
+<p>
+  <img src="frontend/public/logo.png" alt="NEXUS.ai agent logo" width="160" />
+</p>
 
-Understand your workspace. Act with approval. Verify the result.
+<p><strong>A local AI operating layer for macOS</strong></p>
 
-NEXUS gives an AI agent a bounded, explainable view of your Mac — your
+<p>Understand your workspace. Act with approval. Verify the result.</p>
+
+NEXUS.ai gives an AI agent a bounded, explainable view of your Mac — your
 workspace, Git state, processes, local services, and durable project memory —
 without turning your computer into an unattended automation target.
+
+<p>🧠 LangGraph · 🔌 MCP · ⚡ FastAPI · ⚛️ Next.js · 🐍 Python · 🍎 macOS</p>
 
 <p>
   <a href="#quick-start">Quick start</a> ·

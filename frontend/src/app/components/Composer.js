@@ -75,8 +75,8 @@ export function Composer({ busy, onSend, onStop }) {
               submit();
             }
           }}
-          placeholder="Ask NEXUS…"
-          aria-label="Message NEXUS"
+          placeholder="Ask NEXUS.ai…"
+          aria-label="Message NEXUS.ai"
           className="scroll max-h-[168px] flex-1 resize-none bg-transparent text-[15px] leading-[1.6] outline-none placeholder:text-[var(--ink-3)] focus-visible:outline-none"
         />
 

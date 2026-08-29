@@ -20,8 +20,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "NEXUS",
+  title: "NEXUS.ai",
   description: "A local AI operating layer for macOS.",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({ children }) {

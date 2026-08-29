@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ProductPreview } from "./components/landing/ProductPreview";
 import { Reveal } from "./components/landing/Reveal";
 
@@ -16,7 +17,7 @@ import { Reveal } from "./components/landing/Reveal";
  */
 
 export const metadata = {
-  title: "NEXUS — a local AI operating layer for macOS",
+  title: "NEXUS.ai — a local AI operating layer for macOS",
   description:
     "NEXUS understands your development environment, remembers what matters, and notices when something changes — without ever acting on your Mac unless you approve it.",
 };
@@ -50,10 +51,17 @@ const GUARANTEES = [
 function Logo() {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="brand-mark grid h-7 w-7 place-items-center rounded-[9px] bg-[var(--accent)] text-[12px] font-bold text-white">
-        N
+      <Image
+        src="/logo.png"
+        alt=""
+        width={30}
+        height={30}
+        className="brand-logo h-7 w-7 rounded-full object-cover"
+        priority
+      />
+      <span className="text-[14px] font-bold tracking-[0.12em]">
+        NEXUS<span className="text-[var(--accent-ink)]">.ai</span>
       </span>
-      <span className="text-[14px] font-bold tracking-[0.14em]">NEXUS</span>
     </span>
   );
 }

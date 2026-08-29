@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useNexus } from "@/lib/useNexus";
 import { basename } from "@/lib/format";
 import { ApprovalStack } from "../components/Approval";
@@ -134,10 +135,16 @@ export default function Dashboard() {
       {/* --- a thin header: identity, where you are, connection ----------- */}
       <header className="dashboard-header flex h-14 flex-none items-center gap-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-4 backdrop-blur-[14px] sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="brand-mark grid h-[26px] w-[26px] place-items-center rounded-[8px] bg-[var(--accent)] text-[12px] font-bold text-white">
-            N
+          <Image
+            src="/logo.png"
+            alt=""
+            width={28}
+            height={28}
+            className="brand-logo h-[26px] w-[26px] rounded-full object-cover"
+          />
+          <span className="text-[13.5px] font-bold tracking-[0.12em]">
+            NEXUS<span className="text-[var(--accent-ink)]">.ai</span>
           </span>
-          <span className="text-[13.5px] font-bold tracking-[0.14em]">NEXUS</span>
         </Link>
 
         {workspace ? (
