@@ -2,11 +2,10 @@
 
 Usage:
     cd evals
+    uv run python -m src --dry-run --approve       # local scores, no Langfuse
     uv run python -m src --check                   # verify Langfuse credentials
-    uv run python -m src                           # run all cases in 'core'
-    uv run python -m src --dataset core            # explicit dataset
-    uv run python -m src --dataset core --approve  # auto-approve CONFIRM tools
-    uv run python -m src --list                    # list available datasets
+    uv run python -m src --approve                 # live run + Langfuse
+    uv run python -m src --list                    # list datasets
 """
 
 from __future__ import annotations
@@ -20,13 +19,17 @@ from pathlib import Path
 from src.client import check_auth, flush, shutdown
 from src.config import EvalConfig
 from src.dataset import list_datasets, load_dataset
-from src.runner import run_dataset
+from src.report import write_markdown_report
+from src.runner import check_backend, run_dataset
 
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nexus-evals",
-        description="Run evaluation cases against a live NEXUS backend and trace to Langfuse.",
+        description=(
+            "Run evaluation cases against a live NEXUS backend. "
+            "Use --dry-run to score locally without Langfuse keys."
+        ),
     )
     p.add_argument(
         "--dataset",
@@ -38,6 +41,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--approve",
         action="store_true",
         help="Auto-approve CONFIRM tool requests during eval",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Score locally only — no Langfuse credentials required",
     )
     p.add_argument(
         "--concurrency",
@@ -64,6 +72,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Verify Langfuse credentials (auth_check) and exit",
     )
+    p.add_argument(
+        "--skip-health",
+        action="store_true",
+        help="Do not probe GET /health before running cases",
+    )
     return p
 
 
@@ -80,13 +93,14 @@ def main() -> None:
                 print(f"  • {name}")
         return
 
-    try:
-        config = EvalConfig.from_env()
-    except RuntimeError as exc:
-        print(f"Config error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    config = EvalConfig.from_env(dry_run=args.dry_run)
 
     if args.check:
+        try:
+            config.require_langfuse()
+        except RuntimeError as exc:
+            print(f"Config error: {exc}", file=sys.stderr)
+            sys.exit(1)
         print(f"Checking Langfuse at {config.langfuse_host} …")
         try:
             ok = check_auth(config)
@@ -96,7 +110,10 @@ def main() -> None:
         finally:
             shutdown()
         if not ok:
-            print("✗ Credentials rejected — check LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY")
+            print(
+                "✗ Credentials rejected — check LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY",
+                file=sys.stderr,
+            )
             sys.exit(1)
         print("✓ Langfuse auth ok")
         print(f"  host:        {config.langfuse_host}")
@@ -104,9 +121,35 @@ def main() -> None:
         print(f"  nexus api:   {config.nexus_api_url}")
         return
 
+    if not args.dry_run:
+        try:
+            config.require_langfuse()
+        except RuntimeError as exc:
+            print(f"Config error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if not args.skip_health:
+        print(f"▸ Checking backend at {config.nexus_api_url} …", flush=True)
+        try:
+            health = asyncio.run(check_backend(config))
+        except Exception as exc:
+            print(
+                f"✗ Backend unreachable ({exc}). "
+                "Start it with: cd backend && uv run uvicorn app.main:app "
+                "--host 127.0.0.1 --port 8000",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(1)
+        print(f"  ✓ {health}", flush=True)
+
     cases = load_dataset(args.dataset)
-    print(f"▸ Running {len(cases)} case(s) from '{args.dataset}' against {config.nexus_api_url}")
-    print(f"  Langfuse: {config.langfuse_host} ({config.langfuse_environment})")
+    mode = "dry-run (local scores only)" if config.dry_run else (
+        f"Langfuse → {config.langfuse_host} ({config.langfuse_environment})"
+    )
+    print(f"▸ Running {len(cases)} case(s) from '{args.dataset}'")
+    print(f"  Backend: {config.nexus_api_url}")
+    print(f"  Mode: {mode}")
     print(f"  Auto-approve: {args.approve}")
     print()
 
@@ -155,7 +198,7 @@ def main() -> None:
         )
         print(f"    {'overall':<20} {overall:.2f}")
 
-    # --- Write results JSON -------------------------------------------
+    # --- Write results JSON + markdown --------------------------------
     out_path = Path(args.output) if args.output else Path("results") / f"{args.dataset}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
@@ -165,6 +208,7 @@ def main() -> None:
                     "case_id": r.case_id,
                     "task_id": r.task_id,
                     "status": r.status,
+                    "response": r.response,
                     "tools_called": r.tools_called,
                     "outcome": r.outcome,
                     "scores": r.scores,
@@ -177,11 +221,23 @@ def main() -> None:
             indent=2,
         )
     )
+    md_path = out_path.with_suffix(".md")
+    write_markdown_report(
+        results,
+        dataset=args.dataset,
+        path=md_path,
+        dry_run=config.dry_run,
+        nexus_api_url=config.nexus_api_url,
+    )
     print(f"\n  Results written to {out_path}")
+    print(f"  Report written to  {md_path}")
 
-    flush()
-    shutdown()
-    print("  Langfuse events flushed ✓")
+    if config.langfuse_enabled:
+        flush()
+        shutdown()
+        print("  Langfuse events flushed ✓")
+    else:
+        print("  Dry-run: skipped Langfuse (add keys later, then drop --dry-run)")
 
 
 if __name__ == "__main__":
