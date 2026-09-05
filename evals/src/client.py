@@ -3,6 +3,8 @@
 Uses the observation API (`start_as_current_observation`). The old
 ``langfuse.trace()`` / ``.span()`` / ``.generation()`` surface was removed in
 v3 and is not available in the installed SDK.
+
+Dry-run mode never constructs a client — scoring stays local.
 """
 
 from __future__ import annotations
@@ -15,12 +17,18 @@ _instance: Langfuse | None = None
 
 
 def get_langfuse(config: EvalConfig | None = None) -> Langfuse:
-    """Return (and cache) a Langfuse client."""
+    """Return (and cache) a Langfuse client.
+
+    Raises if the config is in dry-run mode or keys are missing.
+    """
     global _instance  # noqa: PLW0603
     if _instance is not None:
         return _instance
 
     cfg = config or EvalConfig.from_env()
+    cfg.require_langfuse()
+    assert cfg.langfuse_secret_key and cfg.langfuse_public_key
+
     _instance = Langfuse(
         secret_key=cfg.langfuse_secret_key,
         public_key=cfg.langfuse_public_key,
