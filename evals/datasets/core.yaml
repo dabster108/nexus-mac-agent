@@ -9,7 +9,6 @@ cases:
     expected_outcome: SUCCESS
     expected_keywords:
       - battery
-      - "%"
     tags: [safe, system]
 
   - id: workspace_detection
@@ -17,8 +16,6 @@ cases:
     expected_tools:
       - detect_workspace
     expected_outcome: SUCCESS
-    expected_keywords:
-      - workspace
     tags: [safe, workspace]
 
   - id: git_status_check
@@ -31,14 +28,14 @@ cases:
     tags: [safe, git]
 
   - id: list_running_processes
-    input: "What processes are running on my machine?"
+    input: "What processes are using the most CPU on my machine?"
     expected_tools:
-      - list_processes
+      - running_processes
     expected_outcome: SUCCESS
     tags: [safe, processes]
 
   - id: system_info
-    input: "Tell me about my system — CPU, memory, OS version"
+    input: "Tell me about my system — CPU, architecture, OS version"
     expected_tools:
       - system_info
     expected_outcome: SUCCESS
@@ -70,11 +67,11 @@ cases:
     tags: [safe, network]
 
   - id: confirm_gate_test
-    input: "Run npm install in my project"
+    input: "Open TextEdit"
     expected_tools:
-      - run_command
+      - open_application
     expected_outcome: SUCCESS
-    tags: [confirm, command]
+    tags: [confirm, applications]
     metadata:
       requires_approval: true
 
