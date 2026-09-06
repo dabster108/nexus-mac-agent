@@ -154,6 +154,14 @@ async def _execute_case(
         events = task_data.get("events") or []
         result.tools_called = _tools_from_events(events)
 
+        # Surface backend failures in the CLI (response/error payload).
+        if result.status == "error" and not result.error:
+            err = task_data.get("error") or {}
+            if isinstance(err, dict) and err.get("message"):
+                result.error = str(err["message"])
+            elif result.response:
+                result.error = result.response
+
         try:
             trace_resp = await http.get(f"/api/tasks/{task_id}/trace")
             if trace_resp.status_code == 200:
@@ -172,6 +180,7 @@ def _record_langfuse(
     result: EvalResult,
     *,
     dataset_name: str,
+    run_name: str,
     config: EvalConfig,
 ) -> None:
     """Push one finished case to Langfuse (no-op when dry-run / unconfigured)."""
@@ -181,14 +190,24 @@ def _record_langfuse(
     from langfuse import propagate_attributes
 
     from src.client import get_langfuse
+    from src.sync import item_id, langfuse_dataset_name
 
     langfuse = get_langfuse(config)
+    remote_dataset = langfuse_dataset_name(dataset_name)
+    dataset_item = item_id(dataset_name, case.id)
+    overall = (
+        sum(result.scores.values()) / len(result.scores) if result.scores else 0.0
+    )
+
     with langfuse.start_as_current_observation(
         as_type="span",
         name=f"eval::{case.id}",
         input={"message": case.input},
         metadata={
             "dataset": dataset_name,
+            "langfuse_dataset": remote_dataset,
+            "dataset_item_id": dataset_item,
+            "run_name": run_name,
             "case_id": case.id,
             "expected_tools": case.expected_tools,
             "expected_outcome": case.expected_outcome,
@@ -200,12 +219,22 @@ def _record_langfuse(
         if result.task_id:
             session_kwargs["session_id"] = result.task_id
         with propagate_attributes(
-            tags=["eval", *case.tags],
-            trace_name=f"eval::{case.id}",
-            metadata={"dataset": dataset_name, "case_id": case.id},
+            tags=["eval", f"run:{run_name}", f"dataset:{dataset_name}", *case.tags],
+            trace_name=f"{run_name}::{case.id}",
+            metadata={
+                "dataset": dataset_name,
+                "langfuse_dataset": remote_dataset,
+                "dataset_item_id": dataset_item,
+                "run_name": run_name,
+                "case_id": case.id,
+            },
             **session_kwargs,
         ):
-            level = "ERROR" if result.status in ("error", "timeout") or result.error else "DEFAULT"
+            level = (
+                "ERROR"
+                if result.status in ("error", "timeout") or result.error
+                else "DEFAULT"
+            )
             root.update(
                 output={
                     "status": result.status,
@@ -214,6 +243,7 @@ def _record_langfuse(
                     "outcome": result.outcome,
                     "latency_ms": result.latency_ms,
                     "scores": result.scores,
+                    "overall": overall,
                     "error": result.error,
                 },
                 level=level,
@@ -227,6 +257,7 @@ def _record_langfuse(
                     "tools_called": result.tools_called,
                     "outcome": result.outcome,
                     "task_status": result.status,
+                    "run_name": run_name,
                 },
             ) as generation:
                 generation.update(output=result.response or None)
@@ -237,6 +268,7 @@ def _record_langfuse(
                     value=score_value,
                     data_type="NUMERIC",
                 )
+            root.score_trace(name="overall", value=overall, data_type="NUMERIC")
 
             result.langfuse_trace_url = langfuse.get_trace_url()
 
@@ -246,6 +278,7 @@ async def run_case(
     config: EvalConfig,
     *,
     dataset_name: str = "core",
+    run_name: str = "eval",
     timeout: float = 90.0,
     auto_approve: bool = False,
 ) -> EvalResult:
@@ -262,7 +295,13 @@ async def run_case(
     )
     # Recording is best-effort: a Langfuse outage must not wipe local scores.
     try:
-        _record_langfuse(case, result, dataset_name=dataset_name, config=config)
+        _record_langfuse(
+            case,
+            result,
+            dataset_name=dataset_name,
+            run_name=run_name,
+            config=config,
+        )
     except Exception as exc:  # noqa: BLE001
         if result.error:
             result.error = f"{result.error}; langfuse failed: {exc}"
@@ -276,6 +315,7 @@ async def run_dataset(
     config: EvalConfig,
     *,
     dataset_name: str = "core",
+    run_name: str = "eval",
     auto_approve: bool = False,
     concurrency: int = 1,
 ) -> list[EvalResult]:
@@ -288,6 +328,7 @@ async def run_dataset(
                 case,
                 config,
                 dataset_name=dataset_name,
+                run_name=run_name,
                 auto_approve=auto_approve,
             )
 

@@ -27,12 +27,14 @@ def test_markdown_report(tmp_path: Path) -> None:
     ]
     path = write_markdown_report(
         results,
-        dataset="core",
-        path=tmp_path / "core.md",
+        dataset="smoke",
+        path=tmp_path / "smoke.md",
         dry_run=True,
         nexus_api_url="http://127.0.0.1:8000",
+        run_name="smoke-test",
     )
     text = path.read_text()
     assert "dry-run" in text
     assert "battery_check" in text
     assert "overall" in text
+    assert "smoke-test" in text

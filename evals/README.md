@@ -1,125 +1,126 @@
 # NEXUS Evaluation Harness
 
-Langfuse-backed evaluation for the NEXUS agent. Runs as an **external client** —
-the backend is unmodified; the harness drives it over HTTP, scores locally, and
-optionally records observations in Langfuse (Python SDK **v4**).
+External eval client for NEXUS. Drives the live backend over HTTP, scores
+deterministically, writes local JSON/markdown, and records observations in
+**Langfuse** (Python SDK v4).
 
 ```text
-evals harness  ── HTTP ──►  NEXUS backend (:8000)
-       │
-       ├── scores + results/*.json + *.md   (always)
-       └── observations ──►  Langfuse       (when keys set; skip with --dry-run)
+evals/datasets/*.yaml
+        │
+        ▼
+   nexus-evals ── HTTP ──► NEXUS backend (:8000)
+        │
+        ├── results/*.json + *.md
+        └── Langfuse traces + scores + Datasets
 ```
 
-## Setup
+## Quick start (keys already in `.env`)
 
 ```bash
 cd evals
 uv sync
-cp .env.example .env
-# NEXUS_API_URL is enough for --dry-run.
-# Add LANGFUSE_* keys later when you want dashboard traces.
-```
 
-## Day 1 — no Langfuse keys yet
-
-Start the backend, then:
-
-```bash
-# Backend
-cd backend && uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-
-# Evals (local scores only)
-cd evals
-uv run python -m src --dry-run --approve
-```
-
-Writes:
-
-- `results/core.json` — machine-readable scores
-- `results/core.md` — scorecard you can read or paste into a PR
-
-`--approve` auto-approves CONFIRM tools (e.g. Open TextEdit). Without it,
-confirm cases park at `permission_required` and still get a safety score.
-
-## When you add Langfuse
-
-1. Create a project at [cloud.langfuse.com](https://cloud.langfuse.com)
-2. **Settings → API Keys** → paste into `evals/.env`
-3. Verify: `uv run python -m src --check`
-4. Drop `--dry-run`:
-
-```bash
-uv run python -m src --approve
-```
-
-## Usage
-
-```bash
-uv run python -m src --list
-uv run python -m src --dry-run --approve
-uv run python -m src --dry-run -d core -c 2
+# 1. Confirm Langfuse
 uv run python -m src --check
+
+# 2. Start NEXUS backend (other terminal)
+cd ../backend
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+# 3. Smoke eval (default dataset) — syncs cases, runs, pushes traces
+cd ../evals
 uv run python -m src --approve
-uv run python -m src -o results/run1.json
 ```
+
+Default dataset is **`smoke`** (4 cases). Full set: `-d core`.
+
+In Langfuse: **Traces** filtered by tag `run:<run-name>`, or **Datasets** →
+`nexus-evals-smoke`.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `uv run python -m src --check` | Verify Langfuse API keys |
+| `uv run python -m src --sync -d smoke` | Upsert YAML → Langfuse Dataset only |
+| `uv run python -m src --approve` | Live smoke run + Langfuse (auto-sync) |
+| `uv run python -m src -d core --approve` | Full core suite |
+| `uv run python -m src --dry-run --approve` | Local scores only (no Langfuse) |
+| `uv run python -m src --list` | List YAML datasets |
+| `uv run python -m src --run-name demo-1 --approve` | Named run for dashboard filtering |
+
+Live runs auto-sync the dataset unless you pass `--no-sync`.
+
+## What gets recorded in Langfuse
+
+Per case:
+
+- Root observation `eval::<case_id>` with input/output, tools, latency
+- Nested `agent_response` generation
+- Numeric scores: `tool_selection`, `outcome`, `keywords`, `completion`,
+  `latency`, `safety`, plus `overall`
+- Tags: `eval`, `run:<run_name>`, `dataset:<name>`, case tags
+- Metadata: `dataset_item_id`, `langfuse_dataset`, `task_id`
+
+Local always:
+
+- `results/<dataset>-<run_name>.json` (+ alias `results/<dataset>.json`)
+- Matching `.md` scorecard
 
 ## Datasets
 
-YAML in `datasets/`. Each case:
+| File | Use |
+| --- | --- |
+| `datasets/smoke.yaml` | First pass after wiring Langfuse (default) |
+| `datasets/core.yaml` | Broader regression suite |
 
-| Field | Required | Description |
-| --- | --- | --- |
-| `id` | ✓ | Unique case id |
-| `input` | ✓ | Message sent to NEXUS |
-| `expected_tools` | | Tools the agent should call |
-| `expected_outcome` | | `SUCCESS`, `PARTIAL_SUCCESS`, `FAILED`, `REFUSED` |
-| `expected_keywords` | | Words expected in the response |
-| `tags` | | Filtering (`safe`, `confirm`, `refusal`, …) |
-| `metadata` | | e.g. `requires_approval: true` |
+Case fields: `id`, `input`, `expected_tools`, `expected_outcome`,
+`expected_keywords`, `tags`, `metadata`.
+
+Remote Langfuse name: `nexus-evals-<local>` with stable item ids
+`nexus-<local>-<case_id>` (re-sync is an upsert).
 
 ## Scores
 
 | Score | Measures |
 | --- | --- |
-| `tool_selection` | Right tools called? |
-| `outcome` | Expected verdict (from `/api/tasks/{id}/trace`) |
+| `tool_selection` | Expected tools called |
+| `outcome` | Verdict from `/api/tasks/{id}/trace` |
 | `keywords` | Expected terms in the response |
 | `completion` | Status is `completed` |
 | `latency` | 1.0 ≤ 10s → 0.0 at 60s |
-| `safety` | Refusal: no tools. Confirm: parked or approved |
+| `safety` | Refusal / confirm-gate behaviour |
+| `overall` | Mean of the above (Langfuse only) |
 
-## How it talks to NEXUS
+## Env
 
-| Step | Endpoint |
-| --- | --- |
-| Health | `GET /health` (skipped with `--skip-health`) |
-| Start | `POST /api/chat` |
-| Poll | `GET /api/tasks/{task_id}` |
-| Approve | `GET /api/permissions/pending` → `POST .../approve` |
-| Trace | `GET /api/tasks/{task_id}/trace` |
+```env
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_HOST=https://us.cloud.langfuse.com   # EU: https://cloud.langfuse.com
+LANGFUSE_ENVIRONMENT=dev
+NEXUS_API_URL=http://127.0.0.1:8000
+```
 
-## Tests (offline)
+## Offline tests
 
 ```bash
 uv run pytest
 ```
 
-No Langfuse keys and no live backend required.
-
 ## Layout
 
 ```text
 evals/
-├── .env.example
-├── datasets/core.yaml
+├── datasets/{smoke,core}.yaml
 ├── src/
-│   ├── __main__.py   CLI (--dry-run, --check, --approve)
-│   ├── client.py     Langfuse v4 (lazy; unused in dry-run)
-│   ├── config.py     env + dry_run / langfuse_enabled
-│   ├── dataset.py
-│   ├── report.py     local markdown scorecard
-│   ├── runner.py     HTTP driver + optional Langfuse record
-│   └── scorers.py
+│   ├── __main__.py   CLI
+│   ├── client.py     Langfuse singleton
+│   ├── config.py
+│   ├── dataset.py    YAML loader
+│   ├── sync.py       YAML → Langfuse Datasets
+│   ├── runner.py     HTTP driver + Langfuse record
+│   ├── scorers.py
+│   └── report.py     markdown scorecard
 └── tests/
 ```
