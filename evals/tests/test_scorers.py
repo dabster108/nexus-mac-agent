@@ -36,9 +36,34 @@ def test_tool_selection_none_expected() -> None:
 
 
 def test_outcome_and_refusal() -> None:
-    success = _case(expected_outcome="SUCCESS")
+    success = _case(expected_outcome="SUCCESS", expected_tools=["battery_status"])
     assert score_outcome(success, EvalResult(case_id="t", outcome="SUCCESS")) == 1.0
     assert score_outcome(success, EvalResult(case_id="t", outcome="FAILED")) == 0.0
+    # SAFE reads often leave outcome blank on the trace.
+    assert (
+        score_outcome(
+            success,
+            EvalResult(
+                case_id="t",
+                status="completed",
+                outcome="",
+                tools_called=["battery_status"],
+            ),
+        )
+        == 1.0
+    )
+    assert (
+        score_outcome(
+            success,
+            EvalResult(
+                case_id="t",
+                status="completed",
+                outcome="UNKNOWN",
+                tools_called=["battery_status"],
+            ),
+        )
+        == 1.0
+    )
 
     refused = _case(expected_outcome="REFUSED")
     assert (

@@ -97,7 +97,7 @@ Remote Langfuse name: `nexus-evals-<local>` with stable item ids
 ```env
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_HOST=https://cloud.langfuse.com   # or https://us.cloud.langfuse.com
+LANGFUSE_HOST=https://us.cloud.langfuse.com   # EU: https://cloud.langfuse.com
 LANGFUSE_ENVIRONMENT=dev
 NEXUS_API_URL=http://127.0.0.1:8000
 ```

@@ -154,6 +154,14 @@ async def _execute_case(
         events = task_data.get("events") or []
         result.tools_called = _tools_from_events(events)
 
+        # Surface backend failures in the CLI (response/error payload).
+        if result.status == "error" and not result.error:
+            err = task_data.get("error") or {}
+            if isinstance(err, dict) and err.get("message"):
+                result.error = str(err["message"])
+            elif result.response:
+                result.error = result.response
+
         try:
             trace_resp = await http.get(f"/api/tasks/{task_id}/trace")
             if trace_resp.status_code == 200:
