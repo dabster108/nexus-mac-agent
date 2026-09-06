@@ -2,10 +2,10 @@
 
 Usage:
     cd evals
-    uv run python -m src --dry-run --approve       # local scores, no Langfuse
-    uv run python -m src --check                   # verify Langfuse credentials
-    uv run python -m src --approve                 # live run + Langfuse
-    uv run python -m src --list                    # list datasets
+    uv run python -m src --check
+    uv run python -m src --sync -d smoke
+    uv run python -m src -d smoke --approve
+    uv run python -m src --dry-run --approve
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from src.client import check_auth, flush, shutdown
@@ -21,21 +22,32 @@ from src.config import EvalConfig
 from src.dataset import list_datasets, load_dataset
 from src.report import write_markdown_report
 from src.runner import check_backend, run_dataset
+from src.sync import sync_dataset
+
+
+def _default_run_name(dataset: str) -> str:
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    return f"{dataset}-{stamp}"
 
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nexus-evals",
         description=(
-            "Run evaluation cases against a live NEXUS backend. "
-            "Use --dry-run to score locally without Langfuse keys."
+            "Run evaluation cases against a live NEXUS backend and record "
+            "scores in Langfuse. Use --dry-run for local-only scoring."
         ),
     )
     p.add_argument(
         "--dataset",
         "-d",
-        default="core",
-        help="Name of the dataset file in evals/datasets/ (default: core)",
+        default="smoke",
+        help="Dataset in evals/datasets/ (default: smoke). Use 'core' for the full set.",
+    )
+    p.add_argument(
+        "--run-name",
+        default=None,
+        help="Name for this eval run in Langfuse tags/metadata (default: <dataset>-<timestamp>)",
     )
     p.add_argument(
         "--approve",
@@ -46,6 +58,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Score locally only — no Langfuse credentials required",
+    )
+    p.add_argument(
+        "--sync",
+        action="store_true",
+        help="Upsert the local YAML dataset into Langfuse Datasets and exit",
+    )
+    p.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Skip auto-syncing the dataset to Langfuse before a live run",
     )
     p.add_argument(
         "--concurrency",
@@ -94,6 +116,7 @@ def main() -> None:
         return
 
     config = EvalConfig.from_env(dry_run=args.dry_run)
+    run_name = args.run_name or _default_run_name(args.dataset)
 
     if args.check:
         try:
@@ -101,7 +124,7 @@ def main() -> None:
         except RuntimeError as exc:
             print(f"Config error: {exc}", file=sys.stderr)
             sys.exit(1)
-        print(f"Checking Langfuse at {config.langfuse_host} …")
+        print(f"Checking Langfuse at {config.langfuse_host} …", flush=True)
         try:
             ok = check_auth(config)
         except Exception as exc:
@@ -119,6 +142,27 @@ def main() -> None:
         print(f"  host:        {config.langfuse_host}")
         print(f"  environment: {config.langfuse_environment}")
         print(f"  nexus api:   {config.nexus_api_url}")
+        return
+
+    if args.sync:
+        if args.dry_run:
+            print("Config error: --sync requires Langfuse (drop --dry-run)", file=sys.stderr)
+            sys.exit(1)
+        try:
+            config.require_langfuse()
+        except RuntimeError as exc:
+            print(f"Config error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"▸ Syncing dataset '{args.dataset}' → Langfuse …", flush=True)
+        try:
+            result = sync_dataset(config, args.dataset)
+        except Exception as exc:
+            print(f"✗ Sync failed: {exc}", file=sys.stderr)
+            shutdown()
+            sys.exit(1)
+        flush()
+        shutdown()
+        print(f"  ✓ {result.total} item(s) upserted into `{result.dataset}`")
         return
 
     if not args.dry_run:
@@ -143,13 +187,24 @@ def main() -> None:
             sys.exit(1)
         print(f"  ✓ {health}", flush=True)
 
+    if config.langfuse_enabled and not args.no_sync:
+        print(f"▸ Syncing '{args.dataset}' to Langfuse before run …", flush=True)
+        try:
+            synced = sync_dataset(config, args.dataset)
+            print(f"  ✓ {synced.total} item(s) in `{synced.dataset}`", flush=True)
+        except Exception as exc:
+            print(f"  ⚠ dataset sync failed ({exc}); continuing with local cases", flush=True)
+
     cases = load_dataset(args.dataset)
-    mode = "dry-run (local scores only)" if config.dry_run else (
-        f"Langfuse → {config.langfuse_host} ({config.langfuse_environment})"
+    mode = (
+        "dry-run (local scores only)"
+        if config.dry_run
+        else f"Langfuse → {config.langfuse_host} ({config.langfuse_environment})"
     )
     print(f"▸ Running {len(cases)} case(s) from '{args.dataset}'")
     print(f"  Backend: {config.nexus_api_url}")
     print(f"  Mode: {mode}")
+    print(f"  Run: {run_name}")
     print(f"  Auto-approve: {args.approve}")
     print()
 
@@ -159,6 +214,7 @@ def main() -> None:
                 cases,
                 config,
                 dataset_name=args.dataset,
+                run_name=run_name,
                 auto_approve=args.approve,
                 concurrency=args.concurrency,
             )
@@ -167,7 +223,6 @@ def main() -> None:
         shutdown()
         raise
 
-    # --- Print summary table -------------------------------------------
     total_scores: dict[str, float] = {}
     count = 0
 
@@ -198,29 +253,37 @@ def main() -> None:
         )
         print(f"    {'overall':<20} {overall:.2f}")
 
-    # --- Write results JSON + markdown --------------------------------
-    out_path = Path(args.output) if args.output else Path("results") / f"{args.dataset}.json"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
-        json.dumps(
-            [
-                {
-                    "case_id": r.case_id,
-                    "task_id": r.task_id,
-                    "status": r.status,
-                    "response": r.response,
-                    "tools_called": r.tools_called,
-                    "outcome": r.outcome,
-                    "scores": r.scores,
-                    "latency_ms": r.latency_ms,
-                    "error": r.error,
-                    "langfuse_trace_url": r.langfuse_trace_url,
-                }
-                for r in results
-            ],
-            indent=2,
-        )
+    out_path = (
+        Path(args.output) if args.output else Path("results") / f"{args.dataset}-{run_name}.json"
     )
+    # Keep a stable alias for the dataset as well.
+    if args.output is None:
+        alias = Path("results") / f"{args.dataset}.json"
+    else:
+        alias = None
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = [
+        {
+            "case_id": r.case_id,
+            "task_id": r.task_id,
+            "status": r.status,
+            "response": r.response,
+            "tools_called": r.tools_called,
+            "outcome": r.outcome,
+            "scores": r.scores,
+            "latency_ms": r.latency_ms,
+            "error": r.error,
+            "langfuse_trace_url": r.langfuse_trace_url,
+            "run_name": run_name,
+            "dataset": args.dataset,
+        }
+        for r in results
+    ]
+    out_path.write_text(json.dumps(payload, indent=2))
+    if alias is not None:
+        alias.write_text(json.dumps(payload, indent=2))
+
     md_path = out_path.with_suffix(".md")
     write_markdown_report(
         results,
@@ -228,14 +291,18 @@ def main() -> None:
         path=md_path,
         dry_run=config.dry_run,
         nexus_api_url=config.nexus_api_url,
+        run_name=run_name,
     )
     print(f"\n  Results written to {out_path}")
+    if alias is not None:
+        print(f"  Alias written to   {alias}")
     print(f"  Report written to  {md_path}")
 
     if config.langfuse_enabled:
         flush()
         shutdown()
         print("  Langfuse events flushed ✓")
+        print(f"  Filter in Langfuse by tag `run:{run_name}` or environment `{config.langfuse_environment}`")
     else:
         print("  Dry-run: skipped Langfuse (add keys later, then drop --dry-run)")
 

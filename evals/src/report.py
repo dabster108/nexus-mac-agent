@@ -16,6 +16,7 @@ def write_markdown_report(
     path: Path,
     dry_run: bool,
     nexus_api_url: str,
+    run_name: str = "",
 ) -> Path:
     """Write a human-readable scorecard next to the JSON results."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -31,6 +32,7 @@ def write_markdown_report(
         "",
         f"- When: {now}",
         f"- Backend: `{nexus_api_url}`",
+        f"- Run: `{run_name or '—'}`",
         f"- Mode: {'dry-run (local only)' if dry_run else 'Langfuse + local'}",
         f"- Cases: {len(results)}",
         "",

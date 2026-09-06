@@ -7,12 +7,19 @@ from src.dataset import list_datasets, load_dataset
 
 def test_core_dataset_loads() -> None:
     assert "core" in list_datasets()
+    assert "smoke" in list_datasets()
     cases = load_dataset("core")
     assert len(cases) >= 8
     ids = {c.id for c in cases}
     assert "battery_check" in ids
     assert "confirm_gate_test" in ids
     assert "refusal_test" in ids
+
+
+def test_smoke_dataset_is_small() -> None:
+    cases = load_dataset("smoke")
+    assert 3 <= len(cases) <= 5
+    assert all("smoke" in c.tags for c in cases)
 
 
 def test_confirm_case_requires_approval() -> None:
