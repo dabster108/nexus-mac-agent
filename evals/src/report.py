@@ -9,6 +9,7 @@ from typing import Any
 
 from src.aggregates import aggregate_scores, case_average, passed_case
 from src.runner import EvalResult
+from src.schema import RUN_SCHEMA
 
 
 def build_run_envelope(
@@ -45,7 +46,7 @@ def build_run_envelope(
     ]
     passed = sum(1 for c in cases if c["passed"])
     return {
-        "schema": "nexus-evals/v1",
+        "schema": RUN_SCHEMA,
         "run_name": run_name,
         "dataset": dataset,
         "dataset_version": dataset_version,

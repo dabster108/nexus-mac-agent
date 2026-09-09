@@ -83,7 +83,9 @@ def test_run_envelope_schema(tmp_path: Path) -> None:
         auto_approve=False,
         started_at="2026-01-01T00:00:00+00:00",
     )
-    assert envelope["schema"] == "nexus-evals/v1"
+    from src.schema import RUN_SCHEMA
+
+    assert envelope["schema"] == RUN_SCHEMA
     assert envelope["passed"] == 1
     assert "latency" in envelope["aggregates"]
     assert envelope["aggregates"]["overall"] == 1.0
