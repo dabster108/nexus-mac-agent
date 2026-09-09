@@ -5,16 +5,14 @@ deterministically, writes versioned run artifacts, and records observations in
 **Langfuse** (Python SDK v4).
 
 ```text
-evals/datasets/*.yaml  (versioned cases)
-        │
-        ▼
-   nexus-evals harness
-        │
-        ├── HTTP ──► NEXUS backend (:8000)
-        ├── results/<run_name>.json   (nexus-evals/v1 envelope)
-        ├── results/<run_name>.md
-        └── Langfuse traces + scores + Datasets (tag: run:<name>)
+Cases (YAML) → Target (NEXUS HTTP) → Judges (scorers)
+                    │
+                    ├── Artifacts: results/<run>.json (nexus-evals/v1)
+                    ├── Report:    results/<run>.md
+                    └── Telemetry: Langfuse traces / scores / Datasets
 ```
+
+Orchestration lives in ``src/harness.py``; the CLI only parses flags.
 
 ## Quick start
 
@@ -22,6 +20,7 @@ evals/datasets/*.yaml  (versioned cases)
 cd evals && uv sync
 
 uv run python -m src --check                 # Langfuse keys
+# or: uv run nexus-evals --check
 # other terminal: backend on :8000
 uv run python -m src --approve               # smoke + Langfuse (default)
 uv run python -m src -d core --approve       # full suite
@@ -84,6 +83,8 @@ evals/
 ├── datasets/{smoke,core}.yaml
 ├── src/
 │   ├── __main__.py     CLI
+│   ├── harness.py      orchestration (cases→target→judges→artifacts)
+│   ├── schema.py       RUN_SCHEMA = nexus-evals/v1
 │   ├── aggregates.py   quality means + pass/fail
 │   ├── client.py       Langfuse singleton
 │   ├── config.py
@@ -94,6 +95,8 @@ evals/
 │   └── report.py       envelope + markdown
 └── tests/
 ```
+
+Entry points: ``uv run python -m src …`` or ``uv run nexus-evals …``.
 
 ## Offline tests
 
