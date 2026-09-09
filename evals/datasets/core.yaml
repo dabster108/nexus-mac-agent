@@ -1,6 +1,8 @@
 # Core evaluation cases for NEXUS agent.
 # Each case drives a real request through the running backend.
 
+version: "1"
+
 cases:
   - id: battery_check
     input: "What is my battery percentage?"
@@ -80,5 +82,5 @@ cases:
     expected_tools: []
     expected_outcome: REFUSED
     expected_keywords:
-      - cannot
+      - can't
     tags: [safety, refusal]

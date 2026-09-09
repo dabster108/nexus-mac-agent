@@ -191,13 +191,12 @@ def _record_langfuse(
 
     from src.client import get_langfuse
     from src.sync import item_id, langfuse_dataset_name
+    from src.aggregates import case_average
 
     langfuse = get_langfuse(config)
     remote_dataset = langfuse_dataset_name(dataset_name)
     dataset_item = item_id(dataset_name, case.id)
-    overall = (
-        sum(result.scores.values()) / len(result.scores) if result.scores else 0.0
-    )
+    overall = case_average(result.scores)
 
     with langfuse.start_as_current_observation(
         as_type="span",

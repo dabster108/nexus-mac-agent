@@ -17,10 +17,11 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from src.aggregates import aggregate_scores, case_average, passed_case
 from src.client import check_auth, flush, shutdown
 from src.config import EvalConfig
-from src.dataset import list_datasets, load_dataset
-from src.report import write_markdown_report
+from src.dataset import list_datasets, load_eval_dataset
+from src.report import build_run_envelope, write_markdown_report
 from src.runner import check_backend, run_dataset
 from src.sync import sync_dataset
 
@@ -47,7 +48,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--run-name",
         default=None,
-        help="Name for this eval run in Langfuse tags/metadata (default: <dataset>-<timestamp>)",
+        help="Name for this eval run (default: <dataset>-<timestamp>)",
     )
     p.add_argument(
         "--approve",
@@ -81,7 +82,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "-o",
         type=str,
         default=None,
-        help="Write results JSON to this path (default: results/<dataset>.json)",
+        help="Write run envelope JSON here (default: results/<run_name>.json)",
     )
     p.add_argument(
         "--list",
@@ -162,7 +163,10 @@ def main() -> None:
             sys.exit(1)
         flush()
         shutdown()
-        print(f"  ✓ {result.total} item(s) upserted into `{result.dataset}`")
+        print(
+            f"  ✓ {result.total} item(s) upserted into `{result.dataset}` "
+            f"(v{result.version})"
+        )
         return
 
     if not args.dry_run:
@@ -191,27 +195,36 @@ def main() -> None:
         print(f"▸ Syncing '{args.dataset}' to Langfuse before run …", flush=True)
         try:
             synced = sync_dataset(config, args.dataset)
-            print(f"  ✓ {synced.total} item(s) in `{synced.dataset}`", flush=True)
+            print(
+                f"  ✓ {synced.total} item(s) in `{synced.dataset}` (v{synced.version})",
+                flush=True,
+            )
         except Exception as exc:
             print(f"  ⚠ dataset sync failed ({exc}); continuing with local cases", flush=True)
 
-    cases = load_dataset(args.dataset)
+    try:
+        dataset = load_eval_dataset(args.dataset)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Dataset error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     mode = (
         "dry-run (local scores only)"
         if config.dry_run
         else f"Langfuse → {config.langfuse_host} ({config.langfuse_environment})"
     )
-    print(f"▸ Running {len(cases)} case(s) from '{args.dataset}'")
+    print(f"▸ Running {len(dataset.cases)} case(s) from '{args.dataset}' v{dataset.version}")
     print(f"  Backend: {config.nexus_api_url}")
     print(f"  Mode: {mode}")
     print(f"  Run: {run_name}")
     print(f"  Auto-approve: {args.approve}")
     print()
 
+    started_at = datetime.now(UTC).isoformat()
     try:
         results = asyncio.run(
             run_dataset(
-                cases,
+                list(dataset.cases),
                 config,
                 dataset_name=args.dataset,
                 run_name=run_name,
@@ -223,66 +236,42 @@ def main() -> None:
         shutdown()
         raise
 
-    total_scores: dict[str, float] = {}
-    count = 0
-
+    aggregates = aggregate_scores(results)
     for r in results:
-        status_icon = "✓" if r.status == "completed" else "✗"
+        mark = "✓" if passed_case(r) else "✗"
         tools_str = ", ".join(r.tools_called) if r.tools_called else "—"
-        avg = sum(r.scores.values()) / len(r.scores) if r.scores else 0.0
+        avg = case_average(r.scores)
         print(
-            f"  {status_icon} {r.case_id:<28} {r.status:<20} "
-            f"tools=[{tools_str}]  avg={avg:.2f}  {r.latency_ms:.0f}ms"
+            f"  {mark} {r.case_id:<28} {r.status:<20} "
+            f"tools=[{tools_str}]  quality={avg:.2f}  {r.latency_ms:.0f}ms"
         )
         if r.error:
             print(f"    ⚠ {r.error}")
         if r.langfuse_trace_url:
             print(f"    ↗ {r.langfuse_trace_url}")
 
-        for k, v in r.scores.items():
-            total_scores[k] = total_scores.get(k, 0.0) + v
-        count += 1
-
     print()
-    if count:
-        print("  Aggregate scores:")
-        for k, v in sorted(total_scores.items()):
-            print(f"    {k:<20} {v / count:.2f}")
-        overall = (
-            sum(total_scores.values()) / (len(total_scores) * count) if total_scores else 0.0
-        )
-        print(f"    {'overall':<20} {overall:.2f}")
+    print("  Aggregate scores (overall excludes latency):")
+    for k, v in aggregates.items():
+        print(f"    {k:<20} {v:.2f}")
 
-    out_path = (
-        Path(args.output) if args.output else Path("results") / f"{args.dataset}-{run_name}.json"
+    envelope = build_run_envelope(
+        results,
+        dataset=args.dataset,
+        dataset_version=dataset.version,
+        run_name=run_name,
+        nexus_api_url=config.nexus_api_url,
+        dry_run=config.dry_run,
+        auto_approve=args.approve,
+        started_at=started_at,
     )
-    # Keep a stable alias for the dataset as well.
-    if args.output is None:
-        alias = Path("results") / f"{args.dataset}.json"
-    else:
-        alias = None
 
+    out_path = Path(args.output) if args.output else Path("results") / f"{run_name}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = [
-        {
-            "case_id": r.case_id,
-            "task_id": r.task_id,
-            "status": r.status,
-            "response": r.response,
-            "tools_called": r.tools_called,
-            "outcome": r.outcome,
-            "scores": r.scores,
-            "latency_ms": r.latency_ms,
-            "error": r.error,
-            "langfuse_trace_url": r.langfuse_trace_url,
-            "run_name": run_name,
-            "dataset": args.dataset,
-        }
-        for r in results
-    ]
-    out_path.write_text(json.dumps(payload, indent=2))
-    if alias is not None:
-        alias.write_text(json.dumps(payload, indent=2))
+    out_path.write_text(json.dumps(envelope, indent=2))
+    alias = Path("results") / f"{args.dataset}.json"
+    if args.output is None:
+        alias.write_text(json.dumps(envelope, indent=2))
 
     md_path = out_path.with_suffix(".md")
     write_markdown_report(
@@ -292,19 +281,28 @@ def main() -> None:
         dry_run=config.dry_run,
         nexus_api_url=config.nexus_api_url,
         run_name=run_name,
+        dataset_version=dataset.version,
+        aggregates=aggregates,
     )
     print(f"\n  Results written to {out_path}")
-    if alias is not None:
+    if args.output is None:
         print(f"  Alias written to   {alias}")
     print(f"  Report written to  {md_path}")
+    print(f"  Passed {envelope['passed']}/{envelope['case_count']}")
 
     if config.langfuse_enabled:
         flush()
         shutdown()
         print("  Langfuse events flushed ✓")
-        print(f"  Filter in Langfuse by tag `run:{run_name}` or environment `{config.langfuse_environment}`")
+        print(
+            f"  Filter in Langfuse by tag `run:{run_name}` "
+            f"or environment `{config.langfuse_environment}`"
+        )
     else:
         print("  Dry-run: skipped Langfuse (add keys later, then drop --dry-run)")
+
+    if envelope["failed"]:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -1,112 +1,81 @@
 # NEXUS Evaluation Harness
 
-External eval client for NEXUS. Drives the live backend over HTTP, scores
-deterministically, writes local JSON/markdown, and records observations in
+External eval harness for NEXUS. Drives the live backend over HTTP, scores
+deterministically, writes versioned run artifacts, and records observations in
 **Langfuse** (Python SDK v4).
 
 ```text
-evals/datasets/*.yaml
+evals/datasets/*.yaml  (versioned cases)
         │
         ▼
-   nexus-evals ── HTTP ──► NEXUS backend (:8000)
+   nexus-evals harness
         │
-        ├── results/*.json + *.md
-        └── Langfuse traces + scores + Datasets
+        ├── HTTP ──► NEXUS backend (:8000)
+        ├── results/<run_name>.json   (nexus-evals/v1 envelope)
+        ├── results/<run_name>.md
+        └── Langfuse traces + scores + Datasets (tag: run:<name>)
 ```
 
-## Quick start (keys already in `.env`)
+## Quick start
 
 ```bash
-cd evals
-uv sync
+cd evals && uv sync
 
-# 1. Confirm Langfuse
-uv run python -m src --check
-
-# 2. Start NEXUS backend (other terminal)
-cd ../backend
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-
-# 3. Smoke eval (default dataset) — syncs cases, runs, pushes traces
-cd ../evals
-uv run python -m src --approve
+uv run python -m src --check                 # Langfuse keys
+# other terminal: backend on :8000
+uv run python -m src --approve               # smoke + Langfuse (default)
+uv run python -m src -d core --approve       # full suite
 ```
 
-Default dataset is **`smoke`** (4 cases). Full set: `-d core`.
-
-In Langfuse: **Traces** filtered by tag `run:<run-name>`, or **Datasets** →
+Filter Langfuse by tag `run:<run_name>` or environment `dev`. Dataset:
 `nexus-evals-smoke`.
+
+## Harness contract
+
+Every run writes a **`nexus-evals/v1`** envelope:
+
+| Field | Meaning |
+| --- | --- |
+| `run_name` / `dataset` / `dataset_version` | Identity of the run |
+| `aggregates` | Per-score means + `overall` (excludes latency) |
+| `passed` / `failed` | Cases with status `completed` and quality ≥ 0.7 |
+| `cases[]` | Per-case scores, tools, trace URL, `passed` |
+
+Exit code **1** if any case fails that bar.
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
-| `uv run python -m src --check` | Verify Langfuse API keys |
-| `uv run python -m src --sync -d smoke` | Upsert YAML → Langfuse Dataset only |
-| `uv run python -m src --approve` | Live smoke run + Langfuse (auto-sync) |
-| `uv run python -m src -d core --approve` | Full core suite |
-| `uv run python -m src --dry-run --approve` | Local scores only (no Langfuse) |
-| `uv run python -m src --list` | List YAML datasets |
-| `uv run python -m src --run-name demo-1 --approve` | Named run for dashboard filtering |
+| `--check` | Verify Langfuse API keys |
+| `--sync -d smoke` | Upsert YAML → Langfuse Dataset |
+| `--approve` | Live run (auto-sync unless `--no-sync`) |
+| `--dry-run --approve` | Local scores only |
+| `--run-name demo-1` | Named run for dashboard filtering |
+| `--list` | List YAML datasets |
 
-Live runs auto-sync the dataset unless you pass `--no-sync`.
+Artifacts default to `results/<run_name>.json` (+ alias `results/<dataset>.json`).
 
-## What gets recorded in Langfuse
+## Scores
 
-Per case:
-
-- Root observation `eval::<case_id>` with input/output, tools, latency
-- Nested `agent_response` generation
-- Numeric scores: `tool_selection`, `outcome`, `keywords`, `completion`,
-  `latency`, `safety`, plus `overall`
-- Tags: `eval`, `run:<run_name>`, `dataset:<name>`, case tags
-- Metadata: `dataset_item_id`, `langfuse_dataset`, `task_id`
-
-Local always:
-
-- `results/<dataset>-<run_name>.json` (+ alias `results/<dataset>.json`)
-- Matching `.md` scorecard
+| Score | Role |
+| --- | --- |
+| `tool_selection` | Expected tools called |
+| `outcome` | Verdict / completed SAFE fallback |
+| `keywords` | Expected terms (apostrophe-normalized) |
+| `completion` | Status is `completed` |
+| `safety` | Refusal / confirm-gate |
+| `latency` | Diagnostic only — **not** in `overall` |
+| `overall` | Mean of quality scores above |
 
 ## Datasets
 
 | File | Use |
 | --- | --- |
-| `datasets/smoke.yaml` | First pass after wiring Langfuse (default) |
-| `datasets/core.yaml` | Broader regression suite |
+| `datasets/smoke.yaml` (`version: "1"`) | Default first pass |
+| `datasets/core.yaml` (`version: "1"`) | Broader regression |
 
-Case fields: `id`, `input`, `expected_tools`, `expected_outcome`,
-`expected_keywords`, `tags`, `metadata`.
-
-Remote Langfuse name: `nexus-evals-<local>` with stable item ids
-`nexus-<local>-<case_id>` (re-sync is an upsert).
-
-## Scores
-
-| Score | Measures |
-| --- | --- |
-| `tool_selection` | Expected tools called |
-| `outcome` | Verdict from `/api/tasks/{id}/trace` |
-| `keywords` | Expected terms in the response |
-| `completion` | Status is `completed` |
-| `latency` | 1.0 ≤ 10s → 0.0 at 60s |
-| `safety` | Refusal / confirm-gate behaviour |
-| `overall` | Mean of the above (Langfuse only) |
-
-## Env
-
-```env
-LANGFUSE_SECRET_KEY=sk-lf-...
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_HOST=https://us.cloud.langfuse.com   # EU: https://cloud.langfuse.com
-LANGFUSE_ENVIRONMENT=dev
-NEXUS_API_URL=http://127.0.0.1:8000
-```
-
-## Offline tests
-
-```bash
-uv run pytest
-```
+Remote Langfuse name: `nexus-evals-<local>`; item id `nexus-<local>-<case_id>`.
 
 ## Layout
 
@@ -114,13 +83,20 @@ uv run pytest
 evals/
 ├── datasets/{smoke,core}.yaml
 ├── src/
-│   ├── __main__.py   CLI
-│   ├── client.py     Langfuse singleton
+│   ├── __main__.py     CLI
+│   ├── aggregates.py   quality means + pass/fail
+│   ├── client.py       Langfuse singleton
 │   ├── config.py
-│   ├── dataset.py    YAML loader
-│   ├── sync.py       YAML → Langfuse Datasets
-│   ├── runner.py     HTTP driver + Langfuse record
+│   ├── dataset.py      validated YAML loader
+│   ├── sync.py         YAML → Langfuse Datasets
+│   ├── runner.py       HTTP driver + Langfuse record
 │   ├── scorers.py
-│   └── report.py     markdown scorecard
+│   └── report.py       envelope + markdown
 └── tests/
+```
+
+## Offline tests
+
+```bash
+uv run pytest
 ```

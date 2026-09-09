@@ -70,6 +70,14 @@ def test_outcome_and_refusal() -> None:
         score_outcome(refused, EvalResult(case_id="t", response="I cannot do that."))
         == 1.0
     )
+    assert (
+        score_outcome(refused, EvalResult(case_id="t", response="I can’t help with that."))
+        == 1.0
+    )
+    assert (
+        score_outcome(refused, EvalResult(case_id="t", response="I can't help with that."))
+        == 1.0
+    )
     assert score_outcome(refused, EvalResult(case_id="t", response="Done.")) == 0.0
 
 
