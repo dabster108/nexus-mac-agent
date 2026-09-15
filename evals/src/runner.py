@@ -22,6 +22,13 @@ from src.scorers import score_result
 _TERMINAL = frozenset({"completed", "error", "cancelled"})
 
 
+def _should_stop_polling(status: str, *, auto_approve: bool) -> bool:
+    """Stop when a task is terminal or parked for user approval."""
+    return status in _TERMINAL or (
+        status == "permission_required" and not auto_approve
+    )
+
+
 @dataclass(slots=True)
 class EvalResult:
     """The outcome of running one eval case."""
@@ -140,7 +147,7 @@ async def _execute_case(
             if auto_approve and status == "permission_required":
                 await _approve_pending(http, task_id)
 
-            if status in _TERMINAL:
+            if _should_stop_polling(status, auto_approve=auto_approve):
                 break
 
             await asyncio.sleep(1.0)
