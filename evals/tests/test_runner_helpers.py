@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.runner import _outcome_from_trace, _tools_from_events
+from src.runner import _outcome_from_trace, _should_stop_polling, _tools_from_events
 
 
 def test_tools_from_events_dedupes() -> None:
@@ -21,3 +21,9 @@ def test_outcome_from_trace_prefers_trace() -> None:
         {"type": "verification_completed", "data": {"outcome": "FAILED"}},
     ]
     assert _outcome_from_trace({}, events) == "FAILED"
+
+
+def test_permission_required_stops_without_auto_approval() -> None:
+    assert _should_stop_polling("permission_required", auto_approve=False)
+    assert not _should_stop_polling("permission_required", auto_approve=True)
+    assert _should_stop_polling("completed", auto_approve=True)
