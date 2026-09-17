@@ -18,6 +18,7 @@ class EvalCase:
     id: str
     input: str
     expected_tools: list[str] = field(default_factory=list)
+    expected_events: list[str] = field(default_factory=list)
     expected_outcome: str = "SUCCESS"
     expected_keywords: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
@@ -76,6 +77,7 @@ def load_eval_dataset(name: str) -> EvalDataset:
                 id=case_id,
                 input=prompt.strip(),
                 expected_tools=list(item.get("expected_tools") or []),
+                expected_events=list(item.get("expected_events") or []),
                 expected_outcome=str(item.get("expected_outcome") or "SUCCESS"),
                 expected_keywords=list(item.get("expected_keywords") or []),
                 tags=list(item.get("tags") or []),
