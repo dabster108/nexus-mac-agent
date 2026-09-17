@@ -56,6 +56,8 @@ cases:
     input: "What do you remember about my projects?"
     expected_tools:
       - list_memories
+    expected_events:
+      - memory_retrieved
     expected_outcome: SUCCESS
     tags: [safe, memory]
 

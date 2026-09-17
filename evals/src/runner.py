@@ -37,6 +37,7 @@ class EvalResult:
     task_id: str | None = None
     status: str = "pending"
     response: str = ""
+    events: list[dict[str, Any]] = field(default_factory=list)
     tools_called: list[str] = field(default_factory=list)
     outcome: str = ""
     trace: dict[str, Any] = field(default_factory=dict)
@@ -159,6 +160,7 @@ async def _execute_case(
         result.latency_ms = (time.monotonic() - t0) * 1000
         result.response = task_data.get("response") or ""
         events = task_data.get("events") or []
+        result.events = events
         result.tools_called = _tools_from_events(events)
 
         # Surface backend failures in the CLI (response/error payload).
@@ -216,6 +218,7 @@ def _record_langfuse(
             "run_name": run_name,
             "case_id": case.id,
             "expected_tools": case.expected_tools,
+            "expected_events": case.expected_events,
             "expected_outcome": case.expected_outcome,
             "task_id": result.task_id,
             **case.metadata,
@@ -246,6 +249,7 @@ def _record_langfuse(
                     "status": result.status,
                     "response": result.response,
                     "tools_called": result.tools_called,
+                    "event_types": [event.get("type") for event in result.events],
                     "outcome": result.outcome,
                     "latency_ms": result.latency_ms,
                     "scores": result.scores,

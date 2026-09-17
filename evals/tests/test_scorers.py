@@ -6,6 +6,7 @@ from src.dataset import EvalCase
 from src.runner import EvalResult
 from src.scorers import (
     score_completion,
+    score_event_contract,
     score_keywords,
     score_latency,
     score_outcome,
@@ -33,6 +34,16 @@ def test_tool_selection_none_expected() -> None:
     case = _case(expected_tools=[])
     assert score_tool_selection(case, EvalResult(case_id="t")) == 1.0
     assert score_tool_selection(case, EvalResult(case_id="t", tools_called=["x"])) == 0.0
+
+
+def test_event_contract_requires_expected_events() -> None:
+    case = _case(expected_events=["memory_retrieved", "context_collected"])
+    result = EvalResult(
+        case_id="t",
+        events=[{"type": "memory_retrieved"}, {"type": "context_collected"}],
+    )
+    assert score_event_contract(case, result) == 1.0
+    assert score_event_contract(case, EvalResult(case_id="t")) == 0.0
 
 
 def test_outcome_and_refusal() -> None:
@@ -115,6 +126,7 @@ def test_score_result_keys() -> None:
     scores = score_result(_case(), EvalResult(case_id="t", status="completed"))
     assert set(scores) == {
         "tool_selection",
+        "event_contract",
         "outcome",
         "keywords",
         "completion",

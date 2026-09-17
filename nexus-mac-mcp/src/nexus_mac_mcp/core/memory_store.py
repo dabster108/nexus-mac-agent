@@ -40,6 +40,7 @@ DEFAULT_DB_NAME = "nexus.db"
 
 MAX_LIST_LIMIT = 50
 DEFAULT_LIST_LIMIT = 20
+SQLITE_BUSY_TIMEOUT_MS = 5_000
 
 #: Ceiling on one memory's serialised value. A memory is a short fact — a path,
 #: a port, a preference — so this is generous. The bound matters because the
@@ -156,7 +157,8 @@ class MemoryStore:
         and the host's filesystem state. Both become one safe message here.
         """
         try:
-            conn = sqlite3.connect(self._path)
+            conn = sqlite3.connect(self._path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)
+            conn.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
         except (sqlite3.Error, OSError) as exc:
             raise MemoryError(_UNAVAILABLE) from exc
         conn.row_factory = sqlite3.Row
@@ -273,7 +275,6 @@ class MemoryStore:
                 "WHERE id=? AND status='ACTIVE'",
                 (now, memory_id),
             )
-        with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM memories WHERE id=? AND status!='DELETED'", (memory_id,)
             ).fetchone()

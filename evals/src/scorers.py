@@ -40,6 +40,15 @@ def score_tool_selection(case: EvalCase, result: EvalResult) -> float:
     return len(overlap) / len(expected)
 
 
+def score_event_contract(case: EvalCase, result: EvalResult) -> float:
+    """Did the backend emit every event required by the case contract?"""
+    if not case.expected_events:
+        return 1.0
+    actual = {str(event.get("type")) for event in result.events}
+    expected = set(case.expected_events)
+    return len(expected & actual) / len(expected)
+
+
 def score_outcome(case: EvalCase, result: EvalResult) -> float:
     """Did the task reach the expected outcome verdict?
 
@@ -131,6 +140,7 @@ def score_result(case: EvalCase, result: EvalResult) -> dict[str, float]:
     """Run all scorers and return a name→value dict."""
     return {
         "tool_selection": score_tool_selection(case, result),
+        "event_contract": score_event_contract(case, result),
         "outcome": score_outcome(case, result),
         "keywords": score_keywords(case, result),
         "completion": score_completion(case, result),
